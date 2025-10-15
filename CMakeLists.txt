@@ -19,6 +19,7 @@ set(SOURCES
     src/main.cpp
     src/Lexer.cpp
     src/AST.cpp
+    src/ASTPrinter.cpp
     src/Parser.cpp
     src/Codegen.cpp
 )

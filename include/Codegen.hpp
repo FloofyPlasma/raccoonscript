@@ -11,24 +11,31 @@
 
 #include "AST.hpp"
 
+struct LocalVar {
+  llvm::AllocaInst *alloca;
+  llvm::Type *type;
+};
+
 class Codegen {
 public:
   Codegen(const std::string &moduleName);
   ~Codegen();
 
-  // Entry point: generate LLVM IR for a list of statements (the program)
   void generate(const std::vector<Statement *> &statements);
 
-  // Access generated module
   std::unique_ptr<llvm::Module> takeModule();
 
 private:
   llvm::LLVMContext context;
   std::unique_ptr<llvm::Module> module;
   std::unique_ptr<llvm::IRBuilder<>> builder;
+  std::unordered_map<std::string, LocalVar> locals;
+
+  static llvm::Type *getLLVMType(const std::string &type,
+                                 llvm::LLVMContext &ctx);
 
   llvm::Value *genExpr(Expr *expr);
-  void genStatement(Statement *stmt);
-
+  llvm::Function *genFunction(FunctionDecl *funcDecl);
   void genVarDecl(VarDecl *varDecl);
+  void genStatement(Statement *stmt);
 };

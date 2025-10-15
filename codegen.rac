@@ -1,3 +1,6 @@
 let variable: i32 = 55;
 let testVar: i64;
-let test_var_init: i32 = variable;
+
+fun testFun(paramA: i32): void {
+    
+}

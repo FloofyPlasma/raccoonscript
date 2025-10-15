@@ -7,6 +7,30 @@
 #include "Lexer.hpp"
 #include "Parser.hpp"
 
+std::ostream &operator<<(std::ostream &out, const TokenType &value) {
+  return out << [value]() -> std::string {
+#define PROCESS_VAL(p)                                                         \
+  case (p):                                                                    \
+    return std::string(#p);
+    switch (value) {
+      PROCESS_VAL(TokenType::Plus);
+      PROCESS_VAL(TokenType::Minus);
+      PROCESS_VAL(TokenType::Star);
+      PROCESS_VAL(TokenType::Slash);
+      PROCESS_VAL(TokenType::Equal);
+      PROCESS_VAL(TokenType::LessThan);
+      PROCESS_VAL(TokenType::GreaterThan);
+      PROCESS_VAL(TokenType::LessEqual);
+      PROCESS_VAL(TokenType::GreaterEqual);
+      PROCESS_VAL(TokenType::DoubleEqual);
+      PROCESS_VAL(TokenType::NotEqual);
+    default:
+      return std::to_string(static_cast<int>(value));
+    }
+#undef PROCESS_VAL
+  }();
+}
+
 // Simple AST printer
 void printStatement(Statement *stmt, int indent);
 
@@ -17,7 +41,7 @@ void printExpr(Expr *expr, int indent = 0) {
   } else if (auto var = dynamic_cast<Variable *>(expr)) {
     std::cout << pad << "Variable: " << var->name << "\n";
   } else if (auto bin = dynamic_cast<BinaryExpr *>(expr)) {
-    std::cout << pad << "BinaryExpr: " << static_cast<int>(bin->op) << "\n";
+    std::cout << pad << "BinaryExpr: " << bin->op << "\n";
     printExpr(bin->left, indent + 2);
     printExpr(bin->right, indent + 2);
   }

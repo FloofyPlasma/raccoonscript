@@ -159,6 +159,14 @@ Expr *Parser::parseExpression(int precedence) {
   }
 
   while (true) {
+    if (this->current.type == TokenType::Semicolon ||
+        this->current.type == TokenType::RightParen ||
+        this->current.type == TokenType::RightBrace ||
+        this->current.type == TokenType::Comma ||
+        this->current.type == TokenType::EndOfFile) {
+      break;
+    }
+
     int opPrecedence = this->getPrecedence(this->current.type);
     if (opPrecedence < precedence) {
       break;
@@ -399,7 +407,6 @@ Statement *Parser::parseForStatement() {
   if (this->current.type != TokenType::Semicolon) {
     condition = this->parseExpression();
   }
-  this->advance(); // consume ';'
 
   if (this->current.type != TokenType::Semicolon) {
     delete initializer;

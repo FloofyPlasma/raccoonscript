@@ -2,6 +2,7 @@ let a = 3;
 let b = 5;
 let really_long_name_with_underscores: i32 = 5035;
 let typed_variable: i64 = 44;
+let testParam = 4;
 
 let e = 5;
 
@@ -37,5 +38,8 @@ fun example(): i32 {
     }
 }
 
+fun placeholder(): void {
+    return;
+}
 
-
+testFun(testParam);

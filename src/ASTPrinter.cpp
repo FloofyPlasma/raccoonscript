@@ -36,6 +36,11 @@ void printExpr(Expr *expr, int indent) {
     std::cout << pad << "BinaryExpr: " << bin->op << "\n";
     printExpr(bin->left, indent + 2);
     printExpr(bin->right, indent + 2);
+  } else if (auto call = dynamic_cast<CallExpr *>(expr)) {
+    std::cout << pad << "CallExpr: " << call->name << "\n";
+    for (auto &arg : call->args) {
+      printExpr(arg, indent + 2);
+    }
   }
 }
 

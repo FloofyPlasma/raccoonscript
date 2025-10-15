@@ -130,8 +130,10 @@ Statement *Parser::parseFunctionDecl() {
   std::string returnType = "void";
   if (this->current.type == TokenType::Colon) {
     this->advance(); // consume ':'
-    if (this->current.type != TokenType::Identifier && this->current.type != TokenType::Keyword) { // FIXME: Should void remain a keyword?
-      return nullptr; // error
+    if (this->current.type != TokenType::Identifier &&
+        this->current.type !=
+            TokenType::Keyword) { // FIXME: Should void remain a keyword?
+      return nullptr;             // error
     }
     returnType = this->current.lexeme;
     this->advance(); // consume return type
@@ -201,6 +203,30 @@ Expr *Parser::parsePrimary() {
   if (this->current.type == TokenType::Identifier) {
     std::string name = this->current.lexeme;
     this->advance(); // consume identifier
+    if (this->current.type == TokenType::LeftParen) {
+      this->advance(); // consume '('
+      std::vector<Expr *> args;
+      while (this->current.type != TokenType::RightParen &&
+             this->current.type != TokenType::EndOfFile) {
+        Expr *arg = this->parseExpression();
+        if (!arg) {
+          return nullptr; // error
+        }
+        args.push_back(arg);
+        if (this->current.type == TokenType::Comma) {
+          this->advance(); // consume ','
+        }
+      }
+      if (this->current.type != TokenType::RightParen) {
+        for (auto a : args) {
+          delete a;
+        }
+        return nullptr; // error
+      }
+      this->advance(); // consume ')'
+      return new CallExpr(name, args);
+    }
+
     return new Variable(name);
   }
   if (this->current.type == TokenType::LeftParen) {
@@ -275,13 +301,11 @@ Statement *Parser::parseIfStatement() {
     return nullptr; // error
   }
 
-  // TODO: Seems this->parseExpresion() may consume the ')', should this be
-  // kept?
-  //   if (this->current.type != TokenType::RightParen) {
-  //     delete condition;
-  //     return nullptr; // error
-  //   }
-  //   this->advance(); // consume ')'
+  if (this->current.type != TokenType::RightParen) {
+    delete condition;
+    return nullptr; // error
+  }
+  this->advance(); // consume ')'
 
   if (this->current.type != TokenType::LeftBrace) {
     delete condition;
@@ -359,13 +383,11 @@ Statement *Parser::parseWhileStatement() {
     return nullptr; // error
   }
 
-  // TODO: Seems this->parseExpresion() may consume the ')', should this be
-  // kept?
-  //   if (this->current.type != TokenType::RightParen) {
-  //     delete condition;
-  //     return nullptr; // error
-  //   }
-  //   this->advance(); // consume ')'
+  if (this->current.type != TokenType::RightParen) {
+    delete condition;
+    return nullptr; // error
+  }
+  this->advance(); // consume ')'
 
   if (this->current.type != TokenType::LeftBrace) {
     delete condition;
@@ -474,9 +496,11 @@ Statement *Parser::parseReturnStatement() {
   this->advance(); // consume 'return'
 
   Expr *value = nullptr;
-  if (this->current.type != TokenType::Semicolon) {
+  if (this->current.type != TokenType::Semicolon &&
+      this->current.type != TokenType::RightBrace) {
     value = this->parseExpression();
     if (!value) {
+      this->advance();
       return nullptr; // We return nothing
     }
   }

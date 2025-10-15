@@ -27,6 +27,12 @@ struct BinaryExpr : Expr {
   BinaryExpr(Expr *l, Expr *r, TokenType o) : left(l), right(r), op(o) {}
 };
 
+struct CallExpr : Expr {
+  std::string name;
+  std::vector<Expr *> args;
+  CallExpr(std::string n, std::vector<Expr *> a) : name(n), args(a) {}
+};
+
 struct Statement {
   virtual ~Statement() = default;
 };

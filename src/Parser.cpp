@@ -32,6 +32,15 @@ Statement *Parser::parseStatement(bool insideFunction) {
     return this->parseForStatement();
   }
 
+  if (this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "return") {
+    return this->parseReturnStatement();
+  }
+
+  if (this->current.type == TokenType::LeftBrace) {
+    return this->parseBlockStatement();
+  }
+
   return this->parseExpressionStatement();
 }
 
@@ -121,7 +130,7 @@ Statement *Parser::parseFunctionDecl() {
   std::string returnType = "void";
   if (this->current.type == TokenType::Colon) {
     this->advance(); // consume ':'
-    if (this->current.type != TokenType::Identifier) {
+    if (this->current.type != TokenType::Identifier && this->current.type != TokenType::Keyword) { // FIXME: Should void remain a keyword?
       return nullptr; // error
     }
     returnType = this->current.lexeme;
@@ -459,4 +468,50 @@ Statement *Parser::parseForStatement() {
   this->advance(); // consume '}'
 
   return new ForStmt(initializer, condition, increment, body);
+}
+
+Statement *Parser::parseReturnStatement() {
+  this->advance(); // consume 'return'
+
+  Expr *value = nullptr;
+  if (this->current.type != TokenType::Semicolon) {
+    value = this->parseExpression();
+    if (!value) {
+      return nullptr; // We return nothing
+    }
+  }
+
+  if (this->current.type != TokenType::Semicolon) {
+    delete value;
+    this->advance(); // skip erroneous token
+    return nullptr;  // error
+  }
+  this->advance(); // consume ';'
+
+  return new ReturnStmt(value);
+}
+
+Statement *Parser::parseBlockStatement() {
+  this->advance(); // consume '{'
+  std::vector<Statement *> statements;
+
+  while (this->current.type != TokenType::RightBrace &&
+         this->current.type != TokenType::EndOfFile) {
+    Statement *stmt = this->parseStatement(true);
+    if (!stmt) {
+      this->advance(); // skip erroneous token
+      continue;
+    }
+    statements.push_back(stmt);
+  }
+
+  if (this->current.type != TokenType::RightBrace) {
+    for (auto s : statements) {
+      delete s;
+    }
+    return nullptr; // error
+  }
+  this->advance(); // consume '}'
+
+  return new BlockStmt(statements);
 }

@@ -23,7 +23,19 @@ fun testFun(paramA: i32): i64 {
     let c = paramA;
 }
 
+
 fun testMultipleParam(testOne: i64, testTwo: i32): void {
     let d = 5;
 }
+
+fun example(): i32 {
+    let x = 3;
+    if (x > 2) {
+        return x;
+    } else {
+        return 0;
+    }
+}
+
+
 

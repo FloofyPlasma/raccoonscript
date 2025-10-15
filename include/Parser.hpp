@@ -27,6 +27,10 @@ public:
 
   Statement *parseForStatement();
 
+  Statement *parseReturnStatement();
+
+  Statement *parseBlockStatement();
+
   Expr *parsePrimary();
 
   Expr *parseInitializer();

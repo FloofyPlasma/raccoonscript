@@ -77,3 +77,13 @@ struct ForStmt : Statement {
   ForStmt(Statement *i, Expr *c, Expr *inc, std::vector<Statement *> b)
       : initializer(i), condition(c), increment(inc), body(b) {}
 };
+
+struct ReturnStmt : Statement {
+  Expr *value; // nullptr if no return expression
+  ReturnStmt(Expr *v = nullptr) : value(v) {}
+};
+
+struct BlockStmt : Statement {
+  std::vector<Statement *> statements;
+  BlockStmt(std::vector<Statement *> s) : statements(s) {}
+};

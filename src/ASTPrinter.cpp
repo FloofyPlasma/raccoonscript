@@ -108,5 +108,17 @@ void printStatement(Statement *stmt, int indent) {
     printWhileStmt(whiles, indent);
   } else if (auto fors = dynamic_cast<ForStmt *>(stmt)) {
     printForStmt(fors, indent);
+  } else if (auto ret = dynamic_cast<ReturnStmt *>(stmt)) {
+    std::cout << pad << "ReturnStmt:\n";
+    if (ret->value) {
+      printExpr(ret->value, indent + 2);
+    } else {
+      std::cout << pad << "\t(void)\n";
+    }
+  } else if (auto block = dynamic_cast<BlockStmt *>(stmt)) {
+    std::cout << pad << "BlockStmt:\n";
+    for (auto &s : block->statements) {
+      printStatement(s, indent + 2);
+    }
   }
 }

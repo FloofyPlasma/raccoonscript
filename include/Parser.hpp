@@ -21,6 +21,12 @@ public:
 
   Statement *parseFunctionDecl();
 
+  Statement *parseIfStatement();
+
+  Statement *parseWhileStatement();
+
+  Statement *parseForStatement();
+
   Expr *parsePrimary();
 
   Expr *parseInitializer();

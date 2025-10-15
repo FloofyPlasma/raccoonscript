@@ -8,6 +8,8 @@
 #include "Parser.hpp"
 
 // Simple AST printer
+void printStatement(Statement *stmt, int indent);
+
 void printExpr(Expr *expr, int indent = 0) {
   std::string pad(indent, '\t');
   if (auto intLit = dynamic_cast<IntLiteral *>(expr)) {
@@ -18,6 +20,49 @@ void printExpr(Expr *expr, int indent = 0) {
     std::cout << pad << "BinaryExpr: " << static_cast<int>(bin->op) << "\n";
     printExpr(bin->left, indent + 2);
     printExpr(bin->right, indent + 2);
+  }
+}
+
+void printIfStmt(IfStmt *ifs, int indent = 0) {
+  std::string pad(indent, '\t');
+  std::cout << pad << "IfStmt:\n";
+  std::cout << pad << "\tCondition:\n";
+  printExpr(ifs->condition, indent + 2);
+  std::cout << pad << "\tThenBranch:\n";
+  for (auto &s : ifs->thenBranch) {
+    printStatement(s, indent + 2);
+  }
+  if (!ifs->elseBranch.empty()) {
+    std::cout << pad << "\tElseBranch:\n";
+    for (auto &s : ifs->elseBranch) {
+      printStatement(s, indent + 2);
+    }
+  }
+}
+
+void printWhileStmt(WhileStmt *whiles, int indent = 0) {
+  std::string pad(indent, '\t');
+  std::cout << pad << "WhileStmt:\n";
+  std::cout << pad << "\tCondition:\n";
+  printExpr(whiles->condition, indent + 2);
+  std::cout << pad << "\tBody:\n";
+  for (auto &s : whiles->body) {
+    printStatement(s, indent + 2);
+  }
+}
+
+void printForStmt(ForStmt *fors, int indent = 0) {
+  std::string pad(indent, '\t');
+  std::cout << pad << "ForStmt:\n";
+  std::cout << pad << "\tInitializer:\n";
+  printStatement(fors->initializer, indent + 2);
+  std::cout << pad << "\tCondition:\n";
+  printExpr(fors->condition, indent + 2);
+  std::cout << pad << "\tIncrement:\n";
+  printExpr(fors->increment, indent + 2);
+  std::cout << pad << "\tBody:\n";
+  for (auto &s : fors->body) {
+    printStatement(s, indent + 2);
   }
 }
 
@@ -41,8 +86,15 @@ void printStatement(Statement *stmt, int indent = 0) {
     std::cout << pad << "\tBody:\n";
     for (auto &s : funcDecl->body)
       printStatement(s, indent + 2);
+  } else if (auto ifs = dynamic_cast<IfStmt *>(stmt)) {
+    printIfStmt(ifs, indent);
+  } else if (auto whiles = dynamic_cast<WhileStmt *>(stmt)) {
+    printWhileStmt(whiles, indent);
+  } else if (auto fors = dynamic_cast<ForStmt *>(stmt)) {
+    printForStmt(fors, indent);
   }
 }
+
 int main(int argc, const char *argv[]) {
   if (argc < 2) {
     std::cerr << "Usage racoonc <source_file>\n";

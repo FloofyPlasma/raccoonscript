@@ -69,6 +69,22 @@ Token Lexer::nextToken() {
     this->pos++;
     return {TokenType::RightBrace, "}", this->line, this->column++};
   }
+  case '<': {
+    this->pos++;
+    if (this->pos < this->source.size() && this->source[pos] == '=') {
+      this->pos++;
+      return {TokenType::LessEqual, "<=", this->line, this->column++};
+    }
+    return {TokenType::LessThan, "<", this->line, this->column++};
+  }
+  case '>': {
+    this->pos++;
+    if (this->pos < this->source.size() && this->source[pos] == '=') {
+      this->pos++;
+      return {TokenType::GreaterEqual, ">=", this->line, this->column++};
+    }
+    return {TokenType::GreaterThan, ">", this->line, this->column++};
+  }
   default: {
     this->pos++;
     return {TokenType::EndOfFile, "", this->line, this->column++};

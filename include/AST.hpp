@@ -54,3 +54,26 @@ struct ExprStmt : Statement {
   Expr *expr;
   ExprStmt(Expr *e) : expr(e) {}
 };
+
+struct IfStmt : Statement {
+  Expr *condition;
+  std::vector<Statement *> thenBranch;
+  std::vector<Statement *> elseBranch; // optional
+  IfStmt(Expr *c, std::vector<Statement *> t, std::vector<Statement *> e = {})
+      : condition(c), thenBranch(t), elseBranch(e) {}
+};
+
+struct WhileStmt : Statement {
+  Expr *condition;
+  std::vector<Statement *> body;
+  WhileStmt(Expr *c, std::vector<Statement *> b) : condition(c), body(b) {}
+};
+
+struct ForStmt : Statement {
+  Statement *initializer; // usually VarDecl or ExprStmt
+  Expr *condition;
+  Expr *increment;
+  std::vector<Statement *> body;
+  ForStmt(Statement *i, Expr *c, Expr *inc, std::vector<Statement *> b)
+      : initializer(i), condition(c), increment(inc), body(b) {}
+};

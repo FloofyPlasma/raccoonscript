@@ -2,17 +2,35 @@
 
 #include <string>
 
-enum class TokenType
-{
-    Identifier, Keyword, IntLiteral, FloatLiteral,
-    Plus, Minus, Star, Slash, Equal, Semicolon, Colon, Comma,
-    LeftParen, RightParen, LeftBrace, RightBrace,
-    EndOfFile
+enum class TokenType {
+  Identifier,
+  Keyword,
+  IntLiteral,
+  FloatLiteral,
+  Plus,
+  Minus,
+  Star,
+  Slash,
+  Equal,
+  Semicolon,
+  Colon,
+  Comma,
+  LeftParen,
+  RightParen,
+  LeftBrace,
+  RightBrace,
+  LessThan,
+  GreaterThan,
+  LessEqual,
+  GreaterEqual,
+  DoubleEqual,
+  NotEqual,
+  EndOfFile
 };
 
 struct Token {
-    TokenType type;
-    std::string lexeme;
-    int line;
-    int column;
+  TokenType type;
+  std::string lexeme;
+  int line;
+  int column;
 };

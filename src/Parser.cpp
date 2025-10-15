@@ -17,6 +17,21 @@ Statement *Parser::parseStatement(bool insideFunction) {
     return this->parseFunctionDecl();
   }
 
+  if (this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "if") {
+    return this->parseIfStatement();
+  }
+
+  if (this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "while") {
+    return this->parseWhileStatement();
+  }
+
+  if (this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "for") {
+    return this->parseForStatement();
+  }
+
   return this->parseExpressionStatement();
 }
 
@@ -229,4 +244,212 @@ Expr *Parser::parseInitializer() {
   return nullptr;
 
   return nullptr;
+}
+
+Statement *Parser::parseIfStatement() {
+  this->advance(); // consume 'if'
+  if (this->current.type != TokenType::LeftParen) {
+    return nullptr; // error
+  }
+  this->advance(); // consume '('
+
+  Expr *condition = this->parseExpression();
+  if (!condition) {
+    return nullptr; // error
+  }
+
+  // TODO: Seems this->parseExpresion() may consume the ')', should this be
+  // kept?
+  //   if (this->current.type != TokenType::RightParen) {
+  //     delete condition;
+  //     return nullptr; // error
+  //   }
+  //   this->advance(); // consume ')'
+
+  if (this->current.type != TokenType::LeftBrace) {
+    delete condition;
+    return nullptr; // error
+  }
+  this->advance(); // consume '{'
+
+  std::vector<Statement *> thenBranch;
+  while (this->current.type != TokenType::RightBrace &&
+         this->current.type != TokenType::EndOfFile) {
+    Statement *stmt = this->parseStatement(true);
+    if (!stmt) {
+      this->advance(); // skip erroneous token
+      continue;
+    }
+    thenBranch.push_back(stmt);
+  }
+
+  if (this->current.type != TokenType::RightBrace) {
+    delete condition;
+    for (auto s : thenBranch) {
+      delete s;
+    }
+    return nullptr; // error
+  }
+  this->advance(); // consume '}'
+
+  std::vector<Statement *> elseBranch;
+  if (this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "else") {
+    this->advance(); // consume 'else'
+    if (this->current.type != TokenType::LeftBrace) {
+      delete condition;
+      for (auto s : thenBranch) {
+        delete s;
+      }
+      return nullptr; // error
+    }
+    this->advance(); // consume '{'
+
+    while (this->current.type != TokenType::RightBrace &&
+           this->current.type != TokenType::EndOfFile) {
+      Statement *stmt = this->parseStatement(true);
+      if (!stmt) {
+        this->advance(); // skip erroneous token
+        continue;
+      }
+      elseBranch.push_back(stmt);
+    }
+    if (this->current.type != TokenType::RightBrace) {
+      delete condition;
+      for (auto s : thenBranch) {
+        delete s;
+      }
+      for (auto s : elseBranch) {
+        delete s;
+      }
+      return nullptr; // error
+    }
+    this->advance(); // consume '}'
+  }
+
+  return new IfStmt(condition, thenBranch, elseBranch);
+}
+
+Statement *Parser::parseWhileStatement() {
+  this->advance(); // consume 'while'
+  if (this->current.type != TokenType::LeftParen) {
+    return nullptr; // error
+  }
+  this->advance(); // consume '('
+
+  Expr *condition = this->parseExpression();
+  if (!condition) {
+    return nullptr; // error
+  }
+
+  // TODO: Seems this->parseExpresion() may consume the ')', should this be
+  // kept?
+  //   if (this->current.type != TokenType::RightParen) {
+  //     delete condition;
+  //     return nullptr; // error
+  //   }
+  //   this->advance(); // consume ')'
+
+  if (this->current.type != TokenType::LeftBrace) {
+    delete condition;
+    return nullptr; // error
+  }
+  this->advance(); // consume '{'
+
+  std::vector<Statement *> body;
+  while (this->current.type != TokenType::RightBrace &&
+         this->current.type != TokenType::EndOfFile) {
+    Statement *stmt = this->parseStatement(true);
+    if (!stmt) {
+      this->advance(); // skip erroneous token
+      continue;
+    }
+    body.push_back(stmt);
+  }
+
+  if (this->current.type != TokenType::RightBrace) {
+    delete condition;
+    for (auto s : body) {
+      delete s;
+    }
+    return nullptr; // error
+  }
+
+  this->advance(); // consume '}'
+
+  return new WhileStmt{condition, body};
+}
+
+Statement *Parser::parseForStatement() {
+  this->advance(); // consume 'for'
+
+  if (this->current.type != TokenType::LeftParen) {
+    return nullptr; // error
+  }
+  this->advance(); // consume '('
+
+  Statement *initializer = nullptr;
+  if (this->current.lexeme == "let") {
+    initializer = this->parseVarDecl();
+  } else if (this->current.type != TokenType::Semicolon) {
+    initializer = this->parseExpressionStatement();
+  }
+
+  Expr *condition = nullptr;
+  if (this->current.type != TokenType::Semicolon) {
+    condition = this->parseExpression();
+  }
+  this->advance(); // consume ';'
+
+  if (this->current.type != TokenType::Semicolon) {
+    delete initializer;
+    delete condition;
+    return nullptr; // error
+  }
+  this->advance(); // consume ';'
+
+  Expr *increment = nullptr;
+  if (this->current.type != TokenType::RightParen) {
+    increment = this->parseExpression();
+  }
+
+  if (this->current.type != TokenType::RightParen) {
+    delete initializer;
+    delete condition;
+    delete increment;
+    return nullptr; // error
+  }
+  this->advance(); // consume ')'
+
+  if (this->current.type != TokenType::LeftBrace) {
+    delete initializer;
+    delete condition;
+    delete increment;
+    return nullptr; // error
+  }
+  this->advance(); // consume '{'
+
+  std::vector<Statement *> body;
+  while (this->current.type != TokenType::RightBrace &&
+         this->current.type != TokenType::EndOfFile) {
+    Statement *stmt = this->parseStatement(true);
+    if (!stmt) {
+      this->advance(); // skip erroneous token
+      continue;
+    }
+    body.push_back(stmt);
+  }
+
+  if (this->current.type != TokenType::RightBrace) {
+    delete initializer;
+    delete condition;
+    delete increment;
+    for (auto s : body) {
+      delete s;
+    }
+    return nullptr; // error
+  }
+  this->advance(); // consume '}'
+
+  return new ForStmt(initializer, condition, increment, body);
 }

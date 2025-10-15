@@ -18,7 +18,8 @@ std::ostream &operator<<(std::ostream &out, const TokenType &value) {
       PROCESS_VAL(TokenType::LessEqual);
       PROCESS_VAL(TokenType::GreaterEqual);
       PROCESS_VAL(TokenType::DoubleEqual);
-      PROCESS_VAL(TokenType::NotEqual);
+      PROCESS_VAL(TokenType::BangEqual);
+      PROCESS_VAL(TokenType::Bang);
     default:
       return std::to_string(static_cast<int>(value));
     }

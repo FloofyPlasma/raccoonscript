@@ -39,7 +39,19 @@ Token Lexer::nextToken() {
   }
   case '=': {
     this->pos++;
+    if (this->pos < this->source.size() && this->source[pos] == '=') {
+      this->pos++;
+      return {TokenType::DoubleEqual, "==", this->line, this->column++};
+    }
     return {TokenType::Equal, "=", this->line, this->column++};
+  }
+  case '!': {
+    this->pos++;
+    if (this->pos < this->source.size() && this->source[pos] == '=') {
+      this->pos++;
+      return {TokenType::BangEqual, "!=", this->line, this->column++};
+    }
+    return {TokenType::Bang, "!", this->line, this->column++};
   }
   case ';': {
     this->pos++;
@@ -84,6 +96,22 @@ Token Lexer::nextToken() {
       return {TokenType::GreaterEqual, ">=", this->line, this->column++};
     }
     return {TokenType::GreaterThan, ">", this->line, this->column++};
+  }
+  case '&': {
+    this->pos++;
+    if (this->pos < this->source.size() && this->source[pos] == '&') {
+      this->pos++;
+      return {TokenType::AndAnd, "&&", this->line, this->column++};
+    }
+    return {TokenType::Ampersand, "&", this->line, this->column++};
+  }
+  case '|': {
+    this->pos++;
+    if (this->pos < this->source.size() && this->source[pos] == '|') {
+      this->pos++;
+      return {TokenType::OrOr, "||", this->line, this->column++};
+    }
+    return {TokenType::Pipe, "|", this->line, this->column++};
   }
   default: {
     this->pos++;

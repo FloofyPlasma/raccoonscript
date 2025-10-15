@@ -24,7 +24,12 @@ enum class TokenType {
   LessEqual,
   GreaterEqual,
   DoubleEqual,
-  NotEqual,
+  BangEqual,
+  Bang,
+  Ampersand,
+  AndAnd,
+  Pipe,
+  OrOr,
   EndOfFile
 };
 

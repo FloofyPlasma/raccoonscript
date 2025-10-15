@@ -5,6 +5,7 @@
 
 #include "AST.hpp"
 #include "ASTPrinter.hpp"
+#include "Codegen.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
 
@@ -41,6 +42,15 @@ int main(int argc, const char *argv[]) {
   for (auto stmt : program) {
     printStatement(stmt);
   }
+
+  std::cout << "\n\n====================\nBeginning "
+               "codegen...\n====================\n\n";
+  Codegen codegen("RaccoonModule");
+  codegen.generate(program);
+
+  auto llvmModule = codegen.takeModule();
+
+  llvmModule->print(llvm::outs(), nullptr);
 
   // Cleanup
   for (auto stmt : program) {

@@ -2,5 +2,6 @@ let variable: i32 = 55;
 let testVar: i64;
 
 fun testFun(paramA: i32): void {
-    
+    let functionParam = 5;
+    let reference_set = variable;
 }

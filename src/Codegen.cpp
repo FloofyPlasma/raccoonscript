@@ -62,13 +62,19 @@ llvm::Value *Codegen::genExpr(Expr *expr) {
     return llvm::ConstantInt::get(getLLVMType("i32", context), intLit->value);
   }
   if (auto *var = dynamic_cast<Variable *>(expr)) {
+    // Check local first
     auto it = locals.find(var->name);
     if (it != locals.end()) {
       return builder->CreateLoad(it->second.type, it->second.alloca, var->name);
     }
+
+    // Check global
+    if (auto *global = module->getGlobalVariable(var->name)) {
+      return builder->CreateLoad(global->getValueType(), global, var->name);
+    }
+
     return nullptr;
   }
-  // Other expressions (BinaryOp, Call, etc.)
   return nullptr;
 }
 
@@ -109,13 +115,19 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
       std::abort();
     }
 
-    llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(),
-                                 func->getEntryBlock().begin());
+    // Save current insertion point
+    llvm::IRBuilder<>::InsertPoint oldIP = builder->saveIP();
+
+    // Insert alloca at the start of the entry block
+    llvm::BasicBlock *entry = &func->getEntryBlock();
+    builder->SetInsertPoint(entry, entry->begin());
     llvm::AllocaInst *alloca =
-        tmpBuilder.CreateAlloca(llvmTy, nullptr, varDecl->name);
+        builder->CreateAlloca(llvmTy, nullptr, varDecl->name);
 
-    locals[varDecl->name] = {alloca, llvmTy};
+    // Restore insertion point
+    builder->restoreIP(oldIP);
 
+    // Initialize if initializer exists
     if (varDecl->initializer) {
       llvm::Value *initVal = genExpr(varDecl->initializer);
       if (!initVal) {
@@ -125,6 +137,8 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
       }
       builder->CreateStore(initVal, alloca);
     }
+
+    locals[varDecl->name] = {alloca, llvmTy};
   }
 }
 

@@ -5,15 +5,28 @@
 #include "Token.hpp"
 
 class Parser {
-    Lexer& lexer;
-    Token current;
+  Lexer &lexer;
 
-    public:
-    Parser(Lexer& l) : lexer(l) {this->advance();}
+public:
+  Token current;
+  Parser(Lexer &l) : lexer(l) { this->advance(); }
 
-    void advance();
+  void advance();
 
-    Expr* parseExpression();
+  Expr *parseExpression(int precedence = 0);
 
-    Statement* parseVarDecl();
+  Statement *parseStatement(bool insideFunction = false);
+
+  Statement *parseVarDecl();
+
+  Statement *parseFunctionDecl();
+
+  Expr *parsePrimary();
+
+  Expr *parseInitializer();
+
+private:
+  int getPrecedence(TokenType type);
+
+  Statement *parseExpressionStatement();
 };

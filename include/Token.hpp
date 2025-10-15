@@ -5,7 +5,7 @@
 enum class TokenType
 {
     Identifier, Keyword, IntLiteral, FloatLiteral,
-    Plus, Minus, Star, Slash, Equal, Semicolon, Colon,
+    Plus, Minus, Star, Slash, Equal, Semicolon, Colon, Comma,
     LeftParen, RightParen, LeftBrace, RightBrace,
     EndOfFile
 };

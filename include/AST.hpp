@@ -24,6 +24,7 @@ struct BinaryExpr : Expr {
   Expr *left;
   Expr *right;
   TokenType op;
+  BinaryExpr(Expr *l, Expr *r, TokenType o) : left(l), right(r), op(o) {}
 };
 
 struct Statement {
@@ -42,4 +43,14 @@ struct FunctionDecl : Statement {
   std::string name;
   std::vector<std::pair<std::string, std::string>> params; // name + type
   std::vector<Statement *> body;
+  std::string returnType;
+  FunctionDecl(std::string n,
+               std::vector<std::pair<std::string, std::string>> p,
+               std::vector<Statement *> b, std::string r)
+      : name(n), params(p), body(b), returnType(r) {}
+};
+
+struct ExprStmt : Statement {
+  Expr *expr;
+  ExprStmt(Expr *e) : expr(e) {}
 };

@@ -45,9 +45,13 @@ Token Lexer::nextToken() {
     this->pos++;
     return {TokenType::Semicolon, ";", this->line, this->column++};
   }
-    case ':': {
+  case ':': {
     this->pos++;
     return {TokenType::Colon, ":", this->line, this->column++};
+  }
+  case ',': {
+    this->pos++;
+    return {TokenType::Comma, ",", this->line, this->column++};
   }
   case '(': {
     this->pos++;

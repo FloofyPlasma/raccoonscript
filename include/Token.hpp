@@ -1,0 +1,18 @@
+#pragma once
+
+#include <string>
+
+enum class TokenType
+{
+    Identifier, Keyword, IntLiteral, FloatLiteral,
+    Plus, Minus, Star, Slash, Equal, Semicolon, Colon,
+    LeftParen, RightParen, LeftBrace, RightBrace,
+    EndOfFile
+};
+
+struct Token {
+    TokenType type;
+    std::string lexeme;
+    int line;
+    int column;
+};

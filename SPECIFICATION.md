@@ -3,12 +3,12 @@
 ## Syntax Overview
 
 * **Statically typed**, with explicit types for variables and functions.
-* **Manual memory management** via `malloc<T>(count)` and `free()`.
+* **Manual memory management** via `malloc<T>(count)` and `free(ptr)`.
 * **Function types** are first-class.
 * **Block scoping** and **variable shadowing** allowed.
 * **Each file is a module**; standard modules use `import std.name;`.
 * **No garbage collector**, **no namespaces**, **no operator overloading**.
-
+* Strings are pointer types (`i8*`) or `char*`.
 ---
 
 ## Keywords
@@ -30,7 +30,7 @@ fun let const struct return if else while for import export malloc free true fal
 * `f32`, `f64`: Floating-point
 * `bool`: Boolean
 * `usize`: Unsigned pointer-sized integer
-* `void`: Sugar for unit type `()`
+* `void`: Void as defined by LLVM
 
 ### Pointers
 
@@ -66,7 +66,7 @@ let x = 5;
 ### Declaration
 
 ```racoon
-fun add(i32 x, i32 y): i32 {
+fun add(x: i32, y: i32): i32 {
     return x + y;
 }
 ```
@@ -122,8 +122,6 @@ for (let i = 0; i < 10; i = i + 1) {
 }
 ```
 
-* No `foreach`.
-
 ---
 
 ## Structs
@@ -137,16 +135,7 @@ struct Point {
 
 * Stack or heap allocated
 * Fields accessed with dot syntax (`p.x`)
-
-### Const Field Rules
-
-```racoon
-const buf: Buffer = Buffer { data: malloc<u8>(1), len: 10 };
-*buf.data = 42;    // OK
-buf.len = 20;      // Error
-```
-
-* Fields of a `const` cannot be mutated unless they are pointers.
+* Const fields cannot be mutated unless pointers.
 
 ---
 
@@ -158,8 +147,9 @@ let p = malloc<i32>(1);
 free(p);
 ```
 
-* No GC or ARC
+* Heap types must match pointer type (i32* to i32 memory).
 * Use `malloc<T>(count)` and `free(ptr)` explicitly
+* String literals are constant arrays `[X * i8]` with global pointers.
 
 ---
 

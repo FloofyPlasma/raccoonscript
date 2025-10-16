@@ -1,8 +1,8 @@
 let variable: i32 = 55;
 let testVar: i64;
 
-let testString: i32* = "hello, world";
-let testString2: i32* = "another string";
+let testString: i8* = "hello, world";
+let testString2: i8* = "another string";
 
 let charLiteral = 'A';
 

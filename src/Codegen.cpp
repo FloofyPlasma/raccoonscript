@@ -558,7 +558,7 @@ llvm::Value *Codegen::genUnaryExpr(UnaryExpr *expr) {
       fprintf(stderr, "Error: Attempt to dereference non-pointer type.\n");
       std::abort();
     }
-    return builder->CreateLoad(ptrType, operandVal, "deref");
+    return builder->CreateLoad(ptrType->getContainedType(0), operandVal, "deref");
   }
   default: {
     llvm::Value *operand = this->genExpr(expr->operand);

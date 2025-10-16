@@ -15,6 +15,10 @@ public:
 
 private:
   void skipWhitespace();
+  void skipComment();
+
   Token number();
   Token identifier();
+  Token stringLiteral();
+  Token charLiteral();
 };

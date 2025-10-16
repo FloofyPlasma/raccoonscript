@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -48,6 +49,10 @@ private:
   llvm::Value *genExpr(Expr *expr);
   llvm::Value *genBinaryExpr(BinaryExpr *expr);
   llvm::Value *genCallExpr(CallExpr *expr);
+  llvm::Value *genStringLiteral(const std::string &str);
+  llvm::Value *genCharLiteral(char c);
+  llvm::Value *genUnaryExpr(UnaryExpr *expr);
+  llvm::Value *genLValue(Expr *expr);
   llvm::Function *genFunction(FunctionDecl *funcDecl);
   void genVarDecl(VarDecl *varDecl);
   void genReturnStatement(ReturnStmt *stmt);

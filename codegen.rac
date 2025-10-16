@@ -1,37 +1,50 @@
 let variable: i32 = 55;
 let testVar: i64;
 
+let testString = "hello, world";
+let testString2 = "another string";
+
+let charLiteral = 'A';
+
 fun testFun(paramA: i32): i32 {
-    let functionParam = 5;
-    let reference_set = variable;
+    let functionParam: i32 = 5;
+    let reference_set: i32 = variable;
 
     return reference_set;
 }
 
-fun testFun2() {
+fun testFun2(): void {
     let added: i32 = 55 + 1;
     let varable_added: i32 = added + 4;
 
     if (varable_added > 5) {
-        let didDo = 1;
+        let didDo: i32 = 1;
     }
 
     if (varable_added < 5) {
-        let smaller = 1;
+        let smaller: i32 = 1;
     } else {
-        let smaller = 0;
+        let smaller: i32 = 0;
     }
 }
 
-fun testFun3() {
-    let i = 1;
+fun testFun3(): void {
+    let i: i32 = 1;
     while (i <= 5) {
         i = i + 1;
     }
 }
 
+fun testPointers(): void {
+    let x: i32 = 42;
+    let ptr_tst: i32* = &x;         
+    let y: i32 = *ptr_tst;           
+    *ptr_tst = 100;                
+}
+
 fun main(): i32 {
-    testFun(5);
+    testFun(5);You
+    testPointers();
 
     return 0;
 }

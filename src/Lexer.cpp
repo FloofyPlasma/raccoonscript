@@ -5,6 +5,7 @@
 
 Token Lexer::nextToken() {
   this->skipWhitespace();
+  this->skipComment();
 
   if (pos >= this->source.size()) {
     return {TokenType::EndOfFile, "", this->line, this->column};
@@ -117,6 +118,12 @@ Token Lexer::nextToken() {
     this->pos++;
     return {TokenType::Percent, "%", this->line, this->column++};
   }
+  case '"': {
+    return this->stringLiteral();
+  }
+  case '\'': {
+    return this->charLiteral();
+  }
   default: {
     this->pos++;
     return {TokenType::EndOfFile, "", this->line, this->column++};
@@ -135,6 +142,27 @@ void Lexer::skipWhitespace() {
     }
 
     this->pos++;
+  }
+}
+
+void Lexer::skipComment() {
+  if (this->source[pos] == '/' && pos + 1 < this->source.size()) {
+    if (this->source[pos + 1] == '/') {
+      pos += 2;
+      while (pos < this->source.size() && this->source[pos] != '\n') {
+        pos++;
+      }
+    } else if (this->source[pos + 1] == '*') {
+      pos += 2;
+      while (pos + 1 < this->source.size() &&
+             !(this->source[pos] == '*' && this->source[pos + 1] == '/')) {
+        if (this->source[pos] == '\n') {
+          line++;
+        }
+        pos++;
+      }
+      pos += 2; // skip closing */
+    }
   }
 }
 
@@ -162,6 +190,38 @@ Token Lexer::number() {
 
     return {TokenType::IntLiteral, lexeme, this->line, this->column};
   }
+}
+
+Token Lexer::stringLiteral() {
+  size_t start = this->pos;
+  this->pos++;
+
+  while (this->pos < this->source.size() && this->source[this->pos] != '"') {
+    if (this->source[this->pos] == '\\' &&
+        this->pos + 1 < this->source.size()) {
+      this->pos += 2; // skip escape sequence
+    } else {
+      this->pos++;
+    }
+  }
+
+  std::string lexeme = this->source.substr(start + 1, this->pos - start - 1);
+  this->pos++;
+
+  return {TokenType::StringLiteral, lexeme, this->line, this->column};
+}
+
+Token Lexer::charLiteral() {
+  size_t start = this->pos;
+  this->pos++;
+
+  char c = this->source[this->pos++];
+  if (c == '\\' && this->pos < this->source.size()) {
+    c = this->source[this->pos++];
+  }
+
+  this->pos++;
+  return {TokenType::CharLiteral, std::string(1, c), this->line, this->column};
 }
 
 Token Lexer::identifier() {

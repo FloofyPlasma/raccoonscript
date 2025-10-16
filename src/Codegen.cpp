@@ -1,5 +1,6 @@
 #include "Codegen.hpp"
 #include "AST.hpp"
+#include "Token.hpp"
 
 using namespace llvm;
 
@@ -83,6 +84,39 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
   if (type == "void") {
     return llvm::Type::getVoidTy(ctx);
   }
+
+  if (type == "i8*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(ctx));
+  }
+  if (type == "i16*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt16Ty(ctx));
+  }
+  if (type == "i32*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt32Ty(ctx));
+  }
+  if (type == "i64*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt64Ty(ctx));
+  }
+  if (type == "i128*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt128Ty(ctx));
+  }
+
+  if (type == "u8*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(ctx));
+  }
+  if (type == "u16*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt16Ty(ctx));
+  }
+  if (type == "u32*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt32Ty(ctx));
+  }
+  if (type == "u64*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt64Ty(ctx));
+  }
+  if (type == "u128*") {
+    return llvm::PointerType::getUnqual(llvm::Type::getInt128Ty(ctx));
+  }
+
   return llvm::Type::getInt32Ty(ctx);
 }
 
@@ -121,6 +155,12 @@ llvm::Value *Codegen::genExpr(Expr *expr) {
     return this->genBinaryExpr(binExp);
   } else if (auto *callExp = dynamic_cast<CallExpr *>(expr)) {
     return this->genCallExpr(callExp);
+  } else if (auto *charLiteral = dynamic_cast<CharLiteral *>(expr)) {
+    return this->genCharLiteral(charLiteral->value);
+  } else if (auto *stringLiteral = dynamic_cast<StrLiteral *>(expr)) {
+    return this->genStringLiteral(stringLiteral->value);
+  } else if (auto *unary = dynamic_cast<UnaryExpr *>(expr)) {
+    return this->genUnaryExpr(unary);
   }
   return nullptr;
 }
@@ -171,6 +211,8 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
     llvm::AllocaInst *alloca =
         builder->CreateAlloca(llvmTy, nullptr, varDecl->name);
 
+    locals[varDecl->name] = {alloca, llvmTy};
+
     // Restore insertion point
     builder->restoreIP(oldIP);
 
@@ -184,8 +226,6 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
       }
       builder->CreateStore(initVal, alloca);
     }
-
-    locals[varDecl->name] = {alloca, llvmTy};
   }
 }
 
@@ -275,64 +315,35 @@ void Codegen::genReturnStatement(ReturnStmt *stmt) {
 }
 
 llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
-  // assignment: lhs must be variable
   if (expr->op == TokenType::Equal) {
-    // ensure LHS is a variable ast node
-    auto *lhsVar = dynamic_cast<Variable *>(expr->left);
-    if (!lhsVar) {
-      fprintf(stderr,
-              "Erorr: Left-hand side of assignment must be a variable.\n");
-      std::abort();
-    }
-
-    llvm::Value *rhsVal = this->genExpr(expr->right);
-    if (!rhsVal) {
-      fprintf(stderr, "Error: Invalid RHS in assignment.\n");
-      std::abort();
-    }
-
-    // find storage
-    llvm::Value *lval =
-        this->findLValueStorage(this->module.get(), this->locals, lhsVar->name);
-    if (!lval) {
-      fprintf(stderr, "Error: Unknown variable '%s' in assignment.\n",
-              lhsVar->name.c_str());
-      std::abort();
-    }
-
-    llvm::Type *dstTy = nullptr;
-    if (auto *alloca = llvm::dyn_cast<llvm::AllocaInst>(lval)) {
-      dstTy = alloca->getAllocatedType();
-    } else if (auto *g = llvm::dyn_cast<llvm::GlobalVariable>(lval)) {
-      dstTy = g->getValueType();
-    } else {
-      fprintf(stderr, "Error: Unsupported lvalue storage for '%s'.\n",
-              lhsVar->name.c_str());
-      std::abort();
-    }
-
-    // cast RHS to destination
-    llvm::Type *srcTy = rhsVal->getType();
-    llvm::Value *rhsCasted = rhsVal;
-    if (srcTy != dstTy) {
-      rhsCasted =
-          this->castIntegerIfNeeded(this->builder.get(), rhsVal, srcTy, dstTy);
-      if (!rhsCasted) {
-        fprintf(stderr,
-                "Error: Failed to convert assignment for RHS for '%s'.\n",
+    // LHS can be a variable or pointer dereference
+    if (auto *lhsVar = dynamic_cast<Variable *>(expr->left)) {
+      llvm::Value *lval = this->findLValueStorage(this->module.get(),
+                                                  this->locals, lhsVar->name);
+      if (!lval) {
+        fprintf(stderr, "Error: Unknown variable '%s' in assignment.\n",
                 lhsVar->name.c_str());
         std::abort();
       }
+      llvm::Value *rhsVal = this->genExpr(expr->right);
+      builder->CreateStore(rhsVal, lval);
+      return rhsVal;
+    } else if (auto *lhsUnary = dynamic_cast<UnaryExpr *>(expr->left)) {
+      if (lhsUnary->op != TokenType::Star) {
+        fprintf(stderr, "Error: Left-hand side of assignment must be variable "
+                        "or pointer dereference.\n");
+        std::abort();
+      }
+      llvm::Value *ptr =
+          this->genLValue(lhsUnary->operand); // pointer to memory
+      llvm::Value *rhsVal = this->genExpr(expr->right);
+      builder->CreateStore(rhsVal, ptr); // store directly
+      return rhsVal;
+    } else {
+      fprintf(stderr, "Error: Left-hand side of assignment must be variable or "
+                      "pointer dereference.\n");
+      std::abort();
     }
-
-    // store :3
-    if (auto *alloca = llvm::dyn_cast<llvm::AllocaInst>(lval)) {
-      this->builder->CreateStore(rhsCasted, alloca);
-    } else if (auto *g = llvm::dyn_cast<llvm::GlobalVariable>(lval)) {
-      this->builder->CreateStore(rhsCasted, g);
-    }
-
-    return rhsCasted;
   }
 
   llvm::Value *lhs = this->genExpr(expr->left);
@@ -343,7 +354,6 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
     std::abort();
   }
 
-  // TODO: Break assumption that we are working with integer types.
   switch (expr->op) {
   case TokenType::Plus: {
     return this->builder->CreateAdd(lhs, rhs, "addtmp");
@@ -379,7 +389,7 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
     return this->builder->CreateICmpSGE(lhs, rhs, "getmp");
   }
   default: {
-    fprintf(stderr, "Error: Unknown binary operator '%s'.\n", expr->op);
+    fprintf(stderr, "Error: Unknown binary operator.\n");
     std::abort();
   }
   }
@@ -478,4 +488,87 @@ llvm::Value *Codegen::genCallExpr(CallExpr *expr) {
 
   return this->builder->CreateCall(
       callee, args, callee->getReturnType()->isVoidTy() ? "" : "calltmp");
+}
+
+llvm::Value *Codegen::genStringLiteral(const std::string &str) {
+  llvm::Constant *strConst =
+      llvm::ConstantDataArray::getString(this->context, str);
+
+  llvm::GlobalVariable *gvar = new llvm::GlobalVariable(
+      *this->module, strConst->getType(), true,
+      llvm::GlobalVariable::ExternalLinkage, strConst, ".str");
+
+  llvm::Value *zero =
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(this->context), 0);
+  llvm::Value *indices[] = {zero, zero};
+
+  return this->builder->CreateInBoundsGEP(strConst->getType(), gvar, indices,
+                                          "srtptr");
+};
+
+llvm::Value *Codegen::genCharLiteral(char c) {
+  return llvm::ConstantInt::get(llvm::Type::getInt8Ty(this->context), c);
+}
+
+llvm::Value *Codegen::genUnaryExpr(UnaryExpr *expr) {
+  switch (expr->op) {
+  case TokenType::Ampersand: { // &var
+    if (auto *var = dynamic_cast<Variable *>(expr->operand)) {
+      llvm::Value *lval =
+          this->findLValueStorage(this->module.get(), this->locals, var->name);
+      if (!lval) {
+        fprintf(stderr, "Error: Unknown variable '%s' for address-of.\n",
+                var->name.c_str());
+        std::abort();
+      }
+      return lval; // return pointer
+    } else {
+      fprintf(stderr, "Error: Address-of operand must be a variable.\n");
+      std::abort();
+    }
+  }
+  case TokenType::Star: {                                  // *ptr
+    llvm::Value *operand = this->genLValue(expr->operand); // get pointer
+    llvm::PointerType *ptrType =
+        llvm::dyn_cast<llvm::PointerType>(operand->getType());
+    if (!ptrType) {
+      fprintf(stderr, "Error: Attempt to dereference non-pointer type.\n");
+      std::abort();
+    }
+    return builder->CreateLoad(ptrType, operand, "deref");
+  }
+  default: {
+    llvm::Value *operand = this->genExpr(expr->operand);
+    if (!operand) {
+      fprintf(stderr, "Error: Invalid operand in unary expression.\n");
+      std::abort();
+    }
+    fprintf(stderr, "Error: Unknown unary operator.\n");
+    std::abort();
+  }
+  }
+}
+
+llvm::Value *Codegen::genLValue(Expr *expr) {
+  if (auto *var = dynamic_cast<Variable *>(expr)) {
+    llvm::Value *lval =
+        this->findLValueStorage(this->module.get(), this->locals, var->name);
+    if (!lval) {
+      fprintf(stderr, "Error: Unknown variable '%s' for lvalue.\n",
+              var->name.c_str());
+      std::abort();
+    }
+    return lval; // pointer
+  } else if (auto *unary = dynamic_cast<UnaryExpr *>(expr)) {
+    if (unary->op == TokenType::Star) {
+      llvm::Value *ptr = this->genExpr(unary->operand);
+      if (!ptr) {
+        fprintf(stderr, "Error: Cannot dereference null pointer.\n");
+        std::abort();
+      }
+      return ptr; // pointer
+    }
+  }
+  fprintf(stderr, "Error: Expression is not an lvalue.\n");
+  std::abort();
 }

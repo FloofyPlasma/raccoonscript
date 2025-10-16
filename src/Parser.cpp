@@ -61,6 +61,10 @@ Statement *Parser::parseVarDecl() {
     }
     type = this->current.lexeme;
     this->advance(); // consume type identifier
+    while (this->current.type == TokenType::Star) {
+      type += "*";
+      this->advance(); // consume star
+    }
   }
 
   Expr *initializer = nullptr;
@@ -164,7 +168,7 @@ Statement *Parser::parseFunctionDecl() {
 }
 
 Expr *Parser::parseExpression(int precedence) {
-  Expr *left = this->parsePrimary();
+  Expr *left = this->parseUnary();
   if (!left) {
     return nullptr; // error
   }
@@ -176,6 +180,25 @@ Expr *Parser::parseExpression(int precedence) {
         this->current.type == TokenType::Comma ||
         this->current.type == TokenType::EndOfFile) {
       break;
+    }
+
+    if (this->current.type == TokenType::Equal) {
+      TokenType op = this->current.type;
+      this->advance(); // consume type
+      Expr *right = this->parseExpression(0);
+      if (!right) {
+        delete left;
+        return nullptr; // error
+      }
+
+      // Ensure left is a valid lvalue
+      if (!dynamic_cast<Variable *>(left) && !dynamic_cast<UnaryExpr *>(left)) {
+        delete right;
+        return nullptr; // invalid lvalue
+      }
+
+      left = new BinaryExpr(left, right, op);
+      continue;
     }
 
     int opPrecedence = this->getPrecedence(this->current.type);
@@ -199,6 +222,21 @@ Expr *Parser::parsePrimary() {
     int value = std::stoi(this->current.lexeme);
     this->advance(); // consume integer literal
     return new IntLiteral(value);
+  }
+  if (this->current.type == TokenType::FloatLiteral) {
+    float value = std::stof(this->current.lexeme);
+    this->advance(); // consume float literal
+    return new FloatLiteral(value);
+  }
+  if (this->current.type == TokenType::CharLiteral) {
+    char value = this->current.lexeme[0];
+    this->advance(); // consume char literal
+    return new CharLiteral(value);
+  }
+  if (this->current.type == TokenType::StringLiteral) {
+    std::string value = this->current.lexeme;
+    this->advance(); // consume string literal
+    return new StrLiteral(value);
   }
   if (this->current.type == TokenType::Identifier) {
     std::string name = this->current.lexeme;
@@ -273,20 +311,16 @@ Statement *Parser::parseExpressionStatement() {
 }
 
 Expr *Parser::parseInitializer() {
-  if (this->current.type == TokenType::IntLiteral) {
-    int value = std::stoi(this->current.lexeme);
-    this->advance(); // consume initializer
-    return new IntLiteral(value);
+  switch (this->current.type) {
+  case TokenType::IntLiteral:
+  case TokenType::FloatLiteral:
+  case TokenType::CharLiteral:
+  case TokenType::StringLiteral:
+  case TokenType::Identifier:
+    return this->parsePrimary();
+  default:
+    return nullptr;
   }
-  if (this->current.type == TokenType::Identifier) {
-    std::string name = this->current.lexeme;
-    this->advance(); // consume name
-    return new Variable(name);
-  }
-  // TODO: More cases (FloatLiteral, BoolLiteral etc).
-  return nullptr;
-
-  return nullptr;
 }
 
 Statement *Parser::parseIfStatement() {
@@ -538,4 +572,20 @@ Statement *Parser::parseBlockStatement() {
   this->advance(); // consume '}'
 
   return new BlockStmt(statements);
+}
+
+Expr *Parser::parseUnary() {
+  if (this->current.type == TokenType::Ampersand ||
+      this->current.type == TokenType::Star) {
+    TokenType op = this->current.type;
+    this->advance(); // consume unary operator
+    Expr *operand = this->parseUnary();
+    if (!operand) {
+      return nullptr;
+    }
+
+    return new UnaryExpr(op, operand);
+  }
+
+  return this->parsePrimary();
 }

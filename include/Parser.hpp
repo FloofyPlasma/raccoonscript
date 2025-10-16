@@ -35,6 +35,8 @@ public:
 
   Expr *parseInitializer();
 
+  Expr* parseUnary();
+
 private:
   int getPrecedence(TokenType type);
 

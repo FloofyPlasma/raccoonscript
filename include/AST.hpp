@@ -15,6 +15,27 @@ struct IntLiteral : Expr {
   IntLiteral(int v) : value(v) {}
 };
 
+struct FloatLiteral : Expr {
+  float value;
+  FloatLiteral(float v) : value(v) {}
+};
+
+struct StrLiteral : Expr {
+  std::string value;
+  StrLiteral(std::string v) : value(v) {}
+};
+
+struct CharLiteral : Expr {
+  char value;
+  CharLiteral(char v) : value(v) {}
+};
+
+struct UnaryExpr : Expr {
+  TokenType op;
+  Expr *operand;
+  UnaryExpr(TokenType op, Expr *o) : op(op), operand(o) {}
+};
+
 struct Variable : Expr {
   std::string name;
   Variable(std::string v) : name(v) {}

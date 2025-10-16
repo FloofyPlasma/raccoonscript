@@ -6,6 +6,8 @@ enum class TokenType {
   Identifier,
   Keyword,
   IntLiteral,
+  StringLiteral,
+  CharLiteral,
   FloatLiteral,
   Plus,
   Minus,

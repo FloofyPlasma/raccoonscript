@@ -85,6 +85,10 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
     return llvm::Type::getVoidTy(ctx);
   }
 
+  if (type == "char") {
+    return llvm::Type::getInt8Ty(ctx);
+  }
+
   if (type.back() == '*') {
     return llvm::PointerType::getUnqual(
         getLLVMType(type.substr(0, type.size() - 1), ctx));

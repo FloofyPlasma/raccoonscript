@@ -1,10 +1,10 @@
 let variable: i32 = 55;
 let testVar: i64;
 
-let testString: i8* = "hello, world";
-let testString2: i8* = "another string";
+let testString: char* = "hello, world";
+let testString2: char* = "another string";
 
-let charLiteral = 'A';
+let charLiteral: char = 'A';
 
 fun testFun(paramA: i32): i32 {
     let functionParam: i32 = 5;

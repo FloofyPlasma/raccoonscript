@@ -149,6 +149,9 @@ void Codegen::genStatement(Statement *stmt) {
   } else if (auto *funDecl = dynamic_cast<FunctionDecl *>(stmt)) {
     this->genFunction(funDecl);
     return;
+  } else if (auto *retStmt = dynamic_cast<ReturnStmt *>(stmt)) {
+    this->genReturnStatement(retStmt);
+    return;
   }
   // ...other statements...
 }
@@ -198,4 +201,19 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
   }
 
   return function;
+}
+
+void Codegen::genReturnStatement(ReturnStmt *stmt) {
+  if (!stmt->value) {
+    // void return
+    builder->CreateRetVoid();
+    return;
+  }
+  llvm::Value *retVal = nullptr;
+  retVal = this->genExpr(stmt->value);
+  if (!retVal) {
+    fprintf(stderr, "Error: Return value expression is invalid.\n");
+    std::abort();
+  }
+  builder->CreateRet(retVal);
 }

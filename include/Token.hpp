@@ -30,6 +30,7 @@ enum class TokenType {
   AndAnd,
   Pipe,
   OrOr,
+  Percent,
   EndOfFile
 };
 

@@ -37,6 +37,7 @@ private:
   llvm::Value *genExpr(Expr *expr);
   llvm::Function *genFunction(FunctionDecl *funcDecl);
   void genVarDecl(VarDecl *varDecl);
-  void genReturnStatement(ReturnStmt* stmt);
+  void genReturnStatement(ReturnStmt *stmt);
+  llvm::Value *genBinaryExpr(BinaryExpr *expr);
   void genStatement(Statement *stmt);
 };

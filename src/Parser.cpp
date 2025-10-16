@@ -66,7 +66,7 @@ Statement *Parser::parseVarDecl() {
   Expr *initializer = nullptr;
   if (this->current.type == TokenType::Equal) {
     this->advance(); // consume '='
-    initializer = this->parseInitializer();
+    initializer = this->parseExpression();
     if (!initializer) {
       return nullptr; // error
     }

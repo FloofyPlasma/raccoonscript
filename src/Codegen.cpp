@@ -60,8 +60,7 @@ std::unique_ptr<Module> Codegen::takeModule() { return std::move(module); }
 llvm::Value *Codegen::genExpr(Expr *expr) {
   if (auto *intLit = dynamic_cast<IntLiteral *>(expr)) {
     return llvm::ConstantInt::get(getLLVMType("i32", context), intLit->value);
-  }
-  if (auto *var = dynamic_cast<Variable *>(expr)) {
+  } else if (auto *var = dynamic_cast<Variable *>(expr)) {
     // Check local first
     auto it = locals.find(var->name);
     if (it != locals.end()) {
@@ -74,6 +73,8 @@ llvm::Value *Codegen::genExpr(Expr *expr) {
     }
 
     return nullptr;
+  } else if (auto *binExp = dynamic_cast<BinaryExpr *>(expr)) {
+    return this->genBinaryExpr(binExp);
   }
   return nullptr;
 }
@@ -216,4 +217,54 @@ void Codegen::genReturnStatement(ReturnStmt *stmt) {
     std::abort();
   }
   builder->CreateRet(retVal);
+}
+
+llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
+  llvm::Value *lhs = this->genExpr(expr->left);
+  llvm::Value *rhs = this->genExpr(expr->right);
+
+  if (!lhs || !rhs) {
+    fprintf(stderr, "Error: Invalid operands in binary expression.\n");
+    std::abort();
+  }
+
+  // TODO: Break assumption that we are working with integer types.
+  switch (expr->op) {
+  case TokenType::Plus: {
+    return this->builder->CreateAdd(lhs, rhs, "addtmp");
+  }
+  case TokenType::Minus: {
+    return this->builder->CreateSub(lhs, rhs, "subtmp");
+  }
+  case TokenType::Star: {
+    return this->builder->CreateMul(lhs, rhs, "multmp");
+  }
+  case TokenType::Slash: {
+    return this->builder->CreateSDiv(lhs, rhs, "divtmp");
+  }
+  case TokenType::Percent: {
+    return this->builder->CreateSRem(lhs, rhs, "modtmp");
+  }
+  case TokenType::DoubleEqual: {
+    return this->builder->CreateICmpEQ(lhs, rhs, "eqtmp");
+  }
+  case TokenType::BangEqual: {
+    return this->builder->CreateICmpNE(lhs, rhs, "netmp");
+  }
+  case TokenType::LessThan: {
+    return this->builder->CreateICmpSLT(lhs, rhs, "lttmp");
+  }
+  case TokenType::LessEqual: {
+    return this->builder->CreateICmpSLE(lhs, rhs, "letmp");
+  }
+  case TokenType::GreaterThan: {
+    return this->builder->CreateICmpSGT(lhs, rhs, "gttmp");
+  }
+  case TokenType::GreaterEqual: {
+    return this->builder->CreateICmpSGE(lhs, rhs, "getmp");
+  }
+  }
+
+  fprintf(stderr, "Error: Unknown binary operator '%s'.\n", expr->op);
+  std::abort();
 }

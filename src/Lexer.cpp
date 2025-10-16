@@ -113,6 +113,10 @@ Token Lexer::nextToken() {
     }
     return {TokenType::Pipe, "|", this->line, this->column++};
   }
+  case '%': {
+    this->pos++;
+    return {TokenType::Percent, "%", this->line, this->column++};
+  }
   default: {
     this->pos++;
     return {TokenType::EndOfFile, "", this->line, this->column++};

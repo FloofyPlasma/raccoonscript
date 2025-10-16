@@ -9,4 +9,6 @@ fun testFun(paramA: i32): i32 {
 }
 
 fun testFun2(): void {
+    let added: i32 = 55 + 1;
+    let varable_added: i64 = added + 4;
 }

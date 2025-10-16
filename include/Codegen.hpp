@@ -35,9 +35,15 @@ private:
                                  llvm::LLVMContext &ctx);
 
   llvm::Value *genExpr(Expr *expr);
+  llvm::Value *genBinaryExpr(BinaryExpr *expr);
+  llvm::Value *genCallExpr(CallExpr *expr);
   llvm::Function *genFunction(FunctionDecl *funcDecl);
   void genVarDecl(VarDecl *varDecl);
   void genReturnStatement(ReturnStmt *stmt);
-  llvm::Value *genBinaryExpr(BinaryExpr *expr);
   void genStatement(Statement *stmt);
+
+  // Control flow
+  void genIfStatement(IfStmt *stmt);
+  void genWhileStatement(WhileStmt *stmt);
+  // void genForStatement(ForStmt* stmt);
 };

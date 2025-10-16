@@ -75,6 +75,8 @@ llvm::Value *Codegen::genExpr(Expr *expr) {
     return nullptr;
   } else if (auto *binExp = dynamic_cast<BinaryExpr *>(expr)) {
     return this->genBinaryExpr(binExp);
+  } else if (auto *callExp = dynamic_cast<CallExpr *>(expr)) {
+    return this->genCallExpr(callExp);
   }
   return nullptr;
 }
@@ -117,7 +119,7 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
     }
 
     // Save current insertion point
-    llvm::IRBuilder<>::InsertPoint oldIP = builder->saveIP();
+    llvm::IRBuilder<>::InsertPoint oldIP = buildeCallExpr *exprr->saveIP();
 
     // Insert alloca at the start of the entry block
     llvm::BasicBlock *entry = &func->getEntryBlock();
@@ -152,6 +154,12 @@ void Codegen::genStatement(Statement *stmt) {
     return;
   } else if (auto *retStmt = dynamic_cast<ReturnStmt *>(stmt)) {
     this->genReturnStatement(retStmt);
+    return;
+  } else if (auto *ifStmt = dynamic_cast<IfStmt *>(stmt)) {
+    this->genIfStatement(ifStmt);
+    return;
+  } else if (auto *whileStmt = dynamic_cast<WhileStmt *>(stmt)) {
+    this->genWhileStatement(whileStmt);
     return;
   }
   // ...other statements...
@@ -263,8 +271,82 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
   case TokenType::GreaterEqual: {
     return this->builder->CreateICmpSGE(lhs, rhs, "getmp");
   }
+  default: {
+    fprintf(stderr, "Error: Unknown binary operator '%s'.\n", expr->op);
+    std::abort();
+  }
+  }
+}
+
+void Codegen::genIfStatement(IfStmt *stmt) {
+  llvm::Value *condVal = this->genExpr(stmt->condition);
+  if (!condVal) {
+    fprintf(stderr, "Error: Invalid if condition.\n");
+    std::abort();
   }
 
-  fprintf(stderr, "Error: Unknown binary operator '%s'.\n", expr->op);
-  std::abort();
+  llvm::Function *func = this->builder->GetInsertBlock()->getParent();
+
+  llvm::BasicBlock *thenBB = llvm::BasicBlock::Create(context, "then", func);
+  llvm::BasicBlock *elseBB =
+      !stmt->elseBranch.empty()
+          ? llvm::BasicBlock::Create(context, "else", func)
+          : nullptr;
+  llvm::BasicBlock *mergeBB = llvm::BasicBlock::Create(context, "ifcont", func);
+
+  if (elseBB) {
+    this->builder->CreateCondBr(condVal, thenBB, elseBB);
+  } else {
+    this->builder->CreateCondBr(condVal, thenBB, mergeBB);
+  }
+
+  // then block
+  this->builder->SetInsertPoint(thenBB);
+  for (auto *s : stmt->thenBranch) {
+    this->genStatement(s);
+  }
+  this->builder->CreateBr(mergeBB);
+
+  // Else block
+  if (elseBB) {
+    this->builder->SetInsertPoint(elseBB);
+    for (auto *s : stmt->elseBranch) {
+      this->genStatement(s);
+    }
+    this->builder->CreateBr(mergeBB);
+  }
+
+  // continue after if
+  this->builder->SetInsertPoint(mergeBB);
+}
+
+void Codegen::genWhileStatement(WhileStmt *stmt) {
+  llvm::Function *func = this->builder->GetInsertBlock()->getParent();
+
+  llvm::BasicBlock *condBB =
+      llvm::BasicBlock::Create(context, "whilecond", func);
+  llvm::BasicBlock *loopBB = llvm::BasicBlock::Create(context, "loop", func);
+  llvm::BasicBlock *afterBB =
+      llvm::BasicBlock::Create(context, "afterloop", func);
+
+  this->builder->CreateBr(condBB);
+
+  // Condition block
+  this->builder->SetInsertPoint(condBB);
+  llvm::Value *condVal = this->genExpr(stmt->condition);
+  if (!condVal) {
+    fprintf(stderr, "Error: Invalid while condition.\n");
+    std::abort();
+  }
+  this->builder->CreateCondBr(condVal, loopBB, afterBB);
+
+  // Loop body
+  this->builder->SetInsertPoint(loopBB);
+  for (auto *s : stmt->body) {
+    this->genStatement(s);
+  }
+  this->builder->CreateBr(condBB);
+
+  // continue after loop
+  this->builder->SetInsertPoint(afterBB);
 }

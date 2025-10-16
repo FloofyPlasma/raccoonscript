@@ -8,7 +8,28 @@ fun testFun(paramA: i32): i32 {
     return reference_set;
 }
 
-fun testFun2(): void {
+fun testFun2() {
     let added: i32 = 55 + 1;
-    let varable_added: i64 = added + 4;
+    let varable_added: i32 = added + 4;
+
+    if (varable_added > 5) {
+        let didDo = 1;
+    }
+
+    if (varable_added < 5) {
+        let smaller = 1;
+    } else {
+        let smaller = 0;
+    }
+}
+
+fun testFun3() {
+    let i = 1;
+    while (i <= 5) {
+        i = i + 1;
+    }
+}
+
+fun main(): i32 {
+    return 0;
 }

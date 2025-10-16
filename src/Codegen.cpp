@@ -3,6 +3,50 @@
 
 using namespace llvm;
 
+llvm::Value *Codegen::castIntegerIfNeeded(llvm::IRBuilder<> *builder,
+                                          llvm::Value *val, llvm::Type *fromTy,
+                                          llvm::Type *toTy) {
+  if (fromTy == toTy) {
+    return val;
+  }
+  auto *fromInt = llvm::dyn_cast<llvm::IntegerType>(fromTy);
+  auto *toInt = llvm::dyn_cast<llvm::IntegerType>(toTy);
+
+  if (!fromInt || !toInt) {
+    // Non-integer conversions are not handled here.
+    return nullptr;
+  }
+
+  unsigned fromW = fromInt->getBitWidth();
+  unsigned toW = toInt->getBitWidth();
+
+  if (fromW == toW) {
+    return val;
+  }
+
+  if (fromW < toW) {
+    return builder->CreateSExt(val, toTy, "sexttmp");
+  } else {
+    return builder->CreateTrunc(val, toTy, "trunctmp");
+  }
+}
+
+llvm::Value *
+Codegen::findLValueStorage(llvm::Module *module,
+                           std::unordered_map<std::string, LocalVar> &locals,
+                           const std::string &name) {
+  auto it = locals.find(name);
+  if (it != locals.end()) {
+    return it->second.alloca;
+  }
+
+  if (auto *g = module->getGlobalVariable(name)) {
+    return g;
+  }
+
+  return nullptr;
+}
+
 llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
   if (type == "i8") {
     return llvm::Type::getInt8Ty(ctx);
@@ -119,7 +163,7 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
     }
 
     // Save current insertion point
-    llvm::IRBuilder<>::InsertPoint oldIP = buildeCallExpr *exprr->saveIP();
+    llvm::IRBuilder<>::InsertPoint oldIP = builder->saveIP();
 
     // Insert alloca at the start of the entry block
     llvm::BasicBlock *entry = &func->getEntryBlock();
@@ -154,6 +198,9 @@ void Codegen::genStatement(Statement *stmt) {
     return;
   } else if (auto *retStmt = dynamic_cast<ReturnStmt *>(stmt)) {
     this->genReturnStatement(retStmt);
+    return;
+  } else if (auto *exprStmt = dynamic_cast<ExprStmt *>(stmt)) {
+    this->genExpr(exprStmt->expr);
     return;
   } else if (auto *ifStmt = dynamic_cast<IfStmt *>(stmt)) {
     this->genIfStatement(ifStmt);
@@ -228,6 +275,66 @@ void Codegen::genReturnStatement(ReturnStmt *stmt) {
 }
 
 llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
+  // assignment: lhs must be variable
+  if (expr->op == TokenType::Equal) {
+    // ensure LHS is a variable ast node
+    auto *lhsVar = dynamic_cast<Variable *>(expr->left);
+    if (!lhsVar) {
+      fprintf(stderr,
+              "Erorr: Left-hand side of assignment must be a variable.\n");
+      std::abort();
+    }
+
+    llvm::Value *rhsVal = this->genExpr(expr->right);
+    if (!rhsVal) {
+      fprintf(stderr, "Error: Invalid RHS in assignment.\n");
+      std::abort();
+    }
+
+    // find storage
+    llvm::Value *lval =
+        this->findLValueStorage(this->module.get(), this->locals, lhsVar->name);
+    if (!lval) {
+      fprintf(stderr, "Error: Unknown variable '%s' in assignment.\n",
+              lhsVar->name.c_str());
+      std::abort();
+    }
+
+    llvm::Type *dstTy = nullptr;
+    if (auto *alloca = llvm::dyn_cast<llvm::AllocaInst>(lval)) {
+      dstTy = alloca->getAllocatedType();
+    } else if (auto *g = llvm::dyn_cast<llvm::GlobalVariable>(lval)) {
+      dstTy = g->getValueType();
+    } else {
+      fprintf(stderr, "Error: Unsupported lvalue storage for '%s'.\n",
+              lhsVar->name.c_str());
+      std::abort();
+    }
+
+    // cast RHS to destination
+    llvm::Type *srcTy = rhsVal->getType();
+    llvm::Value *rhsCasted = rhsVal;
+    if (srcTy != dstTy) {
+      rhsCasted =
+          this->castIntegerIfNeeded(this->builder.get(), rhsVal, srcTy, dstTy);
+      if (!rhsCasted) {
+        fprintf(stderr,
+                "Error: Failed to convert assignment for RHS for '%s'.\n",
+                lhsVar->name.c_str());
+        std::abort();
+      }
+    }
+
+    // store :3
+    if (auto *alloca = llvm::dyn_cast<llvm::AllocaInst>(lval)) {
+      this->builder->CreateStore(rhsCasted, alloca);
+    } else if (auto *g = llvm::dyn_cast<llvm::GlobalVariable>(lval)) {
+      this->builder->CreateStore(rhsCasted, g);
+    }
+
+    return rhsCasted;
+  }
+
   llvm::Value *lhs = this->genExpr(expr->left);
   llvm::Value *rhs = this->genExpr(expr->right);
 
@@ -349,4 +456,26 @@ void Codegen::genWhileStatement(WhileStmt *stmt) {
 
   // continue after loop
   this->builder->SetInsertPoint(afterBB);
+}
+
+llvm::Value *Codegen::genCallExpr(CallExpr *expr) {
+  llvm::Function *callee = this->module->getFunction(expr->name);
+  if (!callee) {
+    fprintf(stderr, "Error: Unknown function '%s',\n", expr->name.c_str());
+    std::abort();
+  }
+
+  std::vector<llvm::Value *> args;
+  for (auto *argExpr : expr->args) {
+    llvm::Value *argVal = this->genExpr(argExpr);
+    if (!argVal) {
+      fprintf(stderr, "Error: Invalid argument in call to '%s'.\n",
+              expr->name.c_str());
+      std::abort();
+    }
+    args.push_back(argVal);
+  }
+
+  return this->builder->CreateCall(
+      callee, args, callee->getReturnType()->isVoidTy() ? "" : "calltmp");
 }

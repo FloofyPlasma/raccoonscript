@@ -31,5 +31,7 @@ fun testFun3() {
 }
 
 fun main(): i32 {
+    testFun(5);
+
     return 0;
 }

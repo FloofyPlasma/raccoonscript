@@ -34,6 +34,17 @@ private:
   static llvm::Type *getLLVMType(const std::string &type,
                                  llvm::LLVMContext &ctx);
 
+  /// helper: cast integer values between widths (signed extend / trunc)
+  static llvm::Value *castIntegerIfNeeded(llvm::IRBuilder<> *builder,
+                                          llvm::Value *val, llvm::Type *fromTy,
+                                          llvm::Type *toTy);
+
+  /// find l-value storage for a variable name (local alloca or global variable)
+  static llvm::Value *
+  findLValueStorage(llvm::Module *module,
+                    std::unordered_map<std::string, LocalVar> &locals,
+                    const std::string &name);
+
   llvm::Value *genExpr(Expr *expr);
   llvm::Value *genBinaryExpr(BinaryExpr *expr);
   llvm::Value *genCallExpr(CallExpr *expr);

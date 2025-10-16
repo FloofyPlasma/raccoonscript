@@ -51,7 +51,9 @@ struct BinaryExpr : Expr {
 struct CallExpr : Expr {
   std::string name;
   std::vector<Expr *> args;
-  CallExpr(std::string n, std::vector<Expr *> a) : name(n), args(a) {}
+  std::string type;
+  CallExpr(std::string n, std::vector<Expr *> a, std::string t)
+      : name(n), args(a), type(t) {}
 };
 
 struct Statement {

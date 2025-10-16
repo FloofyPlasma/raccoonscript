@@ -72,7 +72,14 @@ Statement *Parser::parseVarDecl() {
     this->advance(); // consume '='
     initializer = this->parseExpression();
     if (!initializer) {
-      return nullptr; // error
+      std::cerr << "Failed to parse initializer for variable " << name << "\n";
+      return nullptr;
+    }
+
+    // Log for debugging
+    if (auto *call = dynamic_cast<CallExpr *>(initializer)) {
+      std::cerr << "Parsed CallExpr for " << name << " to function "
+                << call->name << " with typeArg: " << call->type << "\n";
     }
   }
 
@@ -87,65 +94,79 @@ Statement *Parser::parseVarDecl() {
 }
 
 Statement *Parser::parseFunctionDecl() {
-  this->advance(); // consume 'fun'
+  // Consume 'fun'
+  this->advance();
   if (this->current.type != TokenType::Identifier) {
-    return nullptr; // error
-  }
+    return nullptr;
+  } // missing function name
 
   std::string name = this->current.lexeme;
   this->advance(); // consume function name
 
   if (this->current.type != TokenType::LeftParen) {
-    return nullptr; // error
-  }
+    return nullptr;
+  } // missing '('
   this->advance(); // consume '('
 
   std::vector<std::pair<std::string, std::string>> params;
-  while (this->current.type != TokenType::RightParen) {
+
+  // Parse zero or more parameters
+  while (this->current.type != TokenType::RightParen &&
+         this->current.type != TokenType::EndOfFile) {
     if (this->current.type != TokenType::Identifier) {
-      return nullptr; // error
-    }
+      return nullptr;
+    } // expected parameter name
     std::string paramName = this->current.lexeme;
     this->advance(); // consume parameter name
 
     if (this->current.type != TokenType::Colon) {
-      return nullptr; // error
-    }
+      return nullptr;
+    } // expected ':'
     this->advance(); // consume ':'
 
     if (this->current.type != TokenType::Identifier) {
-      return nullptr; // error
-    }
+      return nullptr;
+    } // expected type
     std::string paramType = this->current.lexeme;
-    this->advance(); // consume parameter type
+    this->advance(); // consume type
+
+    // Handle pointer stars
+    while (this->current.type == TokenType::Star) {
+      paramType += "*";
+      this->advance();
+    }
 
     params.push_back({paramName, paramType});
 
     if (this->current.type == TokenType::Comma) {
-      this->advance(); // consume ','
-    } else if (this->current.type == TokenType::RightParen) {
+      this->advance();
+    } // consume ',' and continue
+    else {
       break;
-    } else {
-      return nullptr; // error
     }
   }
+
+  if (this->current.type != TokenType::RightParen) {
+    return nullptr;
+  } // missing ')'
   this->advance(); // consume ')'
 
+  // Parse optional return type
   std::string returnType = "void";
   if (this->current.type == TokenType::Colon) {
     this->advance(); // consume ':'
     if (this->current.type != TokenType::Identifier &&
-        this->current.type !=
-            TokenType::Keyword) { // FIXME: Should void remain a keyword?
-      return nullptr;             // error
+        this->current.type != TokenType::Keyword) {
+      return nullptr;
     }
     returnType = this->current.lexeme;
     this->advance(); // consume return type
   }
 
+  // Parse function body
   if (this->current.type != TokenType::LeftBrace) {
-    return nullptr; // error
-  }
+    return nullptr;
+  } // missing '{'
   this->advance(); // consume '{'
 
   std::vector<Statement *> body;
@@ -153,15 +174,15 @@ Statement *Parser::parseFunctionDecl() {
          this->current.type != TokenType::EndOfFile) {
     Statement *stmt = this->parseStatement(true);
     if (!stmt) {
-      this->advance(); // skip erroneous token
+      this->advance(); // skip bad token
       continue;
     }
     body.push_back(stmt);
   }
 
   if (this->current.type != TokenType::RightBrace) {
-    return nullptr; // error
-  }
+    return nullptr;
+  } // missing '}'
   this->advance(); // consume '}'
 
   return new FunctionDecl(name, params, body, returnType);
@@ -174,44 +195,24 @@ Expr *Parser::parseExpression(int precedence) {
   }
 
   while (true) {
-    if (this->current.type == TokenType::Semicolon ||
-        this->current.type == TokenType::RightParen ||
-        this->current.type == TokenType::RightBrace ||
-        this->current.type == TokenType::Comma ||
-        this->current.type == TokenType::EndOfFile) {
+    // Stop at semicolons, braces, parentheses, commas
+    if (current.type == TokenType::Semicolon ||
+        current.type == TokenType::RightParen ||
+        current.type == TokenType::RightBrace ||
+        current.type == TokenType::Comma ||
+        current.type == TokenType::EndOfFile)
       break;
-    }
 
-    if (this->current.type == TokenType::Equal) {
-      TokenType op = this->current.type;
-      this->advance(); // consume type
-      Expr *right = this->parseExpression(0);
-      if (!right) {
-        delete left;
-        return nullptr; // error
-      }
-
-      // Ensure left is a valid lvalue
-      if (!dynamic_cast<Variable *>(left) && !dynamic_cast<UnaryExpr *>(left)) {
-        delete right;
-        return nullptr; // invalid lvalue
-      }
-
-      left = new BinaryExpr(left, right, op);
-      continue;
-    }
-
-    int opPrecedence = this->getPrecedence(this->current.type);
-    if (opPrecedence < precedence) {
+    // Only handle operators relevant for expressions
+    int opPrecedence = this->getPrecedence(current.type);
+    if (opPrecedence < precedence)
       break;
-    }
 
-    TokenType op = this->current.type;
+    TokenType op = current.type;
     this->advance(); // consume operator
-    Expr *right = this->parseExpression(opPrecedence + 1);
-    if (!right) {
-      break; // stop parsing if right side fails
-    }
+    Expr *right = parseExpression(opPrecedence + 1);
+    if (!right)
+      break;
     left = new BinaryExpr(left, right, op);
   }
   return left;
@@ -240,33 +241,37 @@ Expr *Parser::parsePrimary() {
   }
   if (this->current.type == TokenType::Identifier) {
     std::string name = this->current.lexeme;
-    this->advance(); // consume identifier
+
+    // Do not advance if at top-level and current token is 'fun'
+    if (!(this->current.type == TokenType::Keyword &&
+          this->current.lexeme == "fun")) {
+      this->advance();
+    }
+
     if (this->current.type == TokenType::LeftParen) {
-      this->advance(); // consume '('
+      this->advance();
       std::vector<Expr *> args;
       while (this->current.type != TokenType::RightParen &&
              this->current.type != TokenType::EndOfFile) {
         Expr *arg = this->parseExpression();
-        if (!arg) {
-          return nullptr; // error
-        }
+        if (!arg)
+          return nullptr;
         args.push_back(arg);
-        if (this->current.type == TokenType::Comma) {
-          this->advance(); // consume ','
-        }
+        if (this->current.type == TokenType::Comma)
+          this->advance();
       }
       if (this->current.type != TokenType::RightParen) {
-        for (auto a : args) {
+        for (auto a : args)
           delete a;
-        }
-        return nullptr; // error
+        return nullptr;
       }
-      this->advance(); // consume ')'
-      return new CallExpr(name, args);
+      this->advance();
+      return new CallExpr(name, args, "");
     }
 
     return new Variable(name);
   }
+
   if (this->current.type == TokenType::LeftParen) {
     this->advance(); // consume '('
     Expr *expr = this->parseExpression();
@@ -277,20 +282,57 @@ Expr *Parser::parsePrimary() {
     this->advance(); // consume ')'
     return expr;
   }
+  if (current.type == TokenType::Keyword &&
+      (current.lexeme == "malloc" || current.lexeme == "free")) {
+    std::string name = current.lexeme;
+    this->advance(); // consume keyword
+
+    std::string typeArg;
+    if (current.type == TokenType::LessThan) {
+      this->advance();
+      if (current.type != TokenType::Identifier)
+        return nullptr;
+      typeArg = current.lexeme;
+      this->advance();
+      if (current.type != TokenType::GreaterThan)
+        return nullptr;
+      this->advance();
+    }
+
+    if (current.type != TokenType::LeftParen)
+      return nullptr;
+    this->advance();
+    std::vector<Expr *> args;
+    while (current.type != TokenType::RightParen &&
+           current.type != TokenType::EndOfFile) {
+      Expr *arg = parseExpression();
+      if (!arg)
+        return nullptr;
+      args.push_back(arg);
+      if (current.type == TokenType::Comma)
+        advance();
+    }
+    if (current.type != TokenType::RightParen)
+      return nullptr;
+    advance();
+    return new CallExpr(name, args, typeArg);
+  }
 
   return nullptr;
 }
 
 int Parser::getPrecedence(TokenType type) {
-  switch (type) {
-  case TokenType::Star:
-  case TokenType::Slash:
-    return 10;
-  case TokenType::Plus:
-  case TokenType::Minus:
-    return 5;
-  default:
-    return 0;
+  switch(type) {
+    case TokenType::Star:
+    case TokenType::Slash: return 30;
+    case TokenType::Plus:
+    case TokenType::Minus: return 20;
+    case TokenType::LessThan:
+    case TokenType::LessEqual:
+    case TokenType::GreaterThan:
+    case TokenType::GreaterEqual: return 10;
+    case TokenType::Equal: return 5;
+    default: return -1;
   }
 }
 

@@ -3,7 +3,7 @@
 ## Syntax Overview
 
 * **Statically typed**, with explicit types for variables and functions.
-* **Manual memory management** via `malloc<T>()` and `free()`.
+* **Manual memory management** via `malloc<T>(count)` and `free()`.
 * **Function types** are first-class.
 * **Block scoping** and **variable shadowing** allowed.
 * **Each file is a module**; standard modules use `import std.name;`.
@@ -141,7 +141,7 @@ struct Point {
 ### Const Field Rules
 
 ```racoon
-const buf: Buffer = Buffer { data: malloc<u8>(), len: 10 };
+const buf: Buffer = Buffer { data: malloc<u8>(1), len: 10 };
 *buf.data = 42;    // OK
 buf.len = 20;      // Error
 ```
@@ -153,13 +153,13 @@ buf.len = 20;      // Error
 ## Memory Management
 
 ```racoon
-let p = malloc<i32>();
+let p = malloc<i32>(1);
 *p = 123;
 free(p);
 ```
 
 * No GC or ARC
-* Use `malloc<T>()` and `free(ptr)` explicitly
+* Use `malloc<T>(count)` and `free(ptr)` explicitly
 
 ---
 
@@ -169,7 +169,7 @@ free(p);
 
 ```racoon
 fun make_counter(): fun(): i32 {
-    let ptr = malloc<i32>();
+    let ptr = malloc<i32>(1);
     *ptr = 0;
     return fun() {
         *ptr = *ptr + 1;

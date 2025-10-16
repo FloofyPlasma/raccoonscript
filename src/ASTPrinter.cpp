@@ -42,6 +42,9 @@ void printExpr(Expr *expr, int indent) {
     for (auto &arg : call->args) {
       printExpr(arg, indent + 2);
     }
+  } else if (auto unary = dynamic_cast<UnaryExpr *>(expr)) {
+    std::cout << pad << "UnaryExpr: " << unary->op << "\n";
+    printExpr(unary->operand, indent + 2);
   }
 }
 

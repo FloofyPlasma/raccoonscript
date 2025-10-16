@@ -53,6 +53,7 @@ private:
   llvm::Value *genCharLiteral(char c);
   llvm::Value *genUnaryExpr(UnaryExpr *expr);
   llvm::Value *genLValue(Expr *expr);
+  llvm::Value *genExprLValue(Expr *expr);
   llvm::Function *genFunction(FunctionDecl *funcDecl);
   void genVarDecl(VarDecl *varDecl);
   void genReturnStatement(ReturnStmt *stmt);

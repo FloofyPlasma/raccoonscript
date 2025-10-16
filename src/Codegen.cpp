@@ -85,36 +85,9 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
     return llvm::Type::getVoidTy(ctx);
   }
 
-  if (type == "i8*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(ctx));
-  }
-  if (type == "i16*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt16Ty(ctx));
-  }
-  if (type == "i32*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt32Ty(ctx));
-  }
-  if (type == "i64*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt64Ty(ctx));
-  }
-  if (type == "i128*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt128Ty(ctx));
-  }
-
-  if (type == "u8*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(ctx));
-  }
-  if (type == "u16*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt16Ty(ctx));
-  }
-  if (type == "u32*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt32Ty(ctx));
-  }
-  if (type == "u64*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt64Ty(ctx));
-  }
-  if (type == "u128*") {
-    return llvm::PointerType::getUnqual(llvm::Type::getInt128Ty(ctx));
+  if (type.back() == '*') {
+    return llvm::PointerType::getUnqual(
+        getLLVMType(type.substr(0, type.size() - 1), ctx));
   }
 
   return llvm::Type::getInt32Ty(ctx);
@@ -142,7 +115,8 @@ llvm::Value *Codegen::genExpr(Expr *expr) {
     // Check local first
     auto it = locals.find(var->name);
     if (it != locals.end()) {
-      return builder->CreateLoad(it->second.type, it->second.alloca, var->name);
+      return builder->CreateLoad(it->second.alloca->getAllocatedType(),
+                                 it->second.alloca, var->name);
     }
 
     // Check global
@@ -316,34 +290,10 @@ void Codegen::genReturnStatement(ReturnStmt *stmt) {
 
 llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
   if (expr->op == TokenType::Equal) {
-    // LHS can be a variable or pointer dereference
-    if (auto *lhsVar = dynamic_cast<Variable *>(expr->left)) {
-      llvm::Value *lval = this->findLValueStorage(this->module.get(),
-                                                  this->locals, lhsVar->name);
-      if (!lval) {
-        fprintf(stderr, "Error: Unknown variable '%s' in assignment.\n",
-                lhsVar->name.c_str());
-        std::abort();
-      }
-      llvm::Value *rhsVal = this->genExpr(expr->right);
-      builder->CreateStore(rhsVal, lval);
-      return rhsVal;
-    } else if (auto *lhsUnary = dynamic_cast<UnaryExpr *>(expr->left)) {
-      if (lhsUnary->op != TokenType::Star) {
-        fprintf(stderr, "Error: Left-hand side of assignment must be variable "
-                        "or pointer dereference.\n");
-        std::abort();
-      }
-      llvm::Value *ptr =
-          this->genLValue(lhsUnary->operand); // pointer to memory
-      llvm::Value *rhsVal = this->genExpr(expr->right);
-      builder->CreateStore(rhsVal, ptr); // store directly
-      return rhsVal;
-    } else {
-      fprintf(stderr, "Error: Left-hand side of assignment must be variable or "
-                      "pointer dereference.\n");
-      std::abort();
-    }
+    // left must be lvalue
+    llvm::Value *lhsPtr = genExprLValue(expr->left);
+    llvm::Value *rhsVal = genExpr(expr->right);
+    return builder->CreateStore(rhsVal, lhsPtr);
   }
 
   llvm::Value *lhs = this->genExpr(expr->left);
@@ -469,6 +419,75 @@ void Codegen::genWhileStatement(WhileStmt *stmt) {
 }
 
 llvm::Value *Codegen::genCallExpr(CallExpr *expr) {
+  if (expr->name == "malloc") {
+    printf("Generating malloc for type %s\n", expr->type.c_str());
+
+    if (expr->args.size() != 1) {
+      fprintf(stderr,
+              "Error: malloc<T>(count) requires exactly one argument.\n");
+      std::abort();
+    }
+
+    if (expr->type.empty()) {
+      fprintf(stderr, "Error: malloc requires a type parameter.\n");
+      std::abort();
+    }
+
+    llvm::Type *elemTy = this->getLLVMType(expr->type, this->context);
+    llvm::Value *countVal = this->genExpr(expr->args[0]);
+
+    llvm::Value *elemSize = builder->CreateIntCast(
+        llvm::ConstantInt::get(
+            builder->getInt64Ty(),
+            this->module->getDataLayout().getTypeAllocSize(elemTy)),
+        countVal->getType(), false);
+
+    llvm::Value *totalSize =
+        builder->CreateMul(countVal, elemSize, "totalsize");
+
+    // Cast totalSize to i64 for malloc
+    totalSize = builder->CreateIntCast(totalSize, builder->getInt64Ty(), false);
+
+    // Get or declare malloc
+    llvm::Function *mallocFunc = module->getFunction("malloc");
+    if (!mallocFunc) {
+      llvm::FunctionType *mallocTy = llvm::FunctionType::get(
+          builder->getPtrTy(), {builder->getInt64Ty()}, false);
+      mallocFunc = llvm::Function::Create(
+          mallocTy, llvm::Function::ExternalLinkage, "malloc", module.get());
+    }
+
+    // Call malloc
+    llvm::Value *rawPtr =
+        builder->CreateCall(mallocFunc, {totalSize}, "mallocCall");
+
+    // Bitcast to proper type
+    return builder->CreateBitCast(rawPtr, llvm::PointerType::get(elemTy, 0),
+                                  "mallocCast");
+  }
+
+  if (expr->name == "free") {
+    if (expr->args.size() != 1) {
+      fprintf(stderr, "Error: free requires exactly one argument.\n");
+      std::abort();
+    }
+
+    llvm::Value *ptrVal = this->genExpr(expr->args[0]);
+
+    // Get or declare free
+    llvm::Function *freeFunc = module->getFunction("free");
+    if (!freeFunc) {
+      llvm::FunctionType *ftype = llvm::FunctionType::get(
+          builder->getVoidTy(), {builder->getPtrTy()}, false);
+      freeFunc = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
+                                        "free", module.get());
+    }
+
+    // Bitcast pointer to i8*
+    llvm::Value *casted =
+        builder->CreateBitCast(ptrVal, builder->getPtrTy(), "freeCast");
+    return builder->CreateCall(freeFunc, {casted});
+  }
   llvm::Function *callee = this->module->getFunction(expr->name);
   if (!callee) {
     fprintf(stderr, "Error: Unknown function '%s',\n", expr->name.c_str());
@@ -527,15 +546,15 @@ llvm::Value *Codegen::genUnaryExpr(UnaryExpr *expr) {
       std::abort();
     }
   }
-  case TokenType::Star: {                                  // *ptr
-    llvm::Value *operand = this->genLValue(expr->operand); // get pointer
+  case TokenType::Star: { // *ptr
+    llvm::Value *operandVal = this->genExpr(expr->operand);
     llvm::PointerType *ptrType =
-        llvm::dyn_cast<llvm::PointerType>(operand->getType());
+        llvm::dyn_cast<llvm::PointerType>(operandVal->getType());
     if (!ptrType) {
       fprintf(stderr, "Error: Attempt to dereference non-pointer type.\n");
       std::abort();
     }
-    return builder->CreateLoad(ptrType, operand, "deref");
+    return builder->CreateLoad(ptrType, operandVal, "deref");
   }
   default: {
     llvm::Value *operand = this->genExpr(expr->operand);
@@ -570,5 +589,24 @@ llvm::Value *Codegen::genLValue(Expr *expr) {
     }
   }
   fprintf(stderr, "Error: Expression is not an lvalue.\n");
+  std::abort();
+}
+
+llvm::Value *Codegen::genExprLValue(Expr *expr) {
+  if (auto *var = dynamic_cast<Variable *>(expr)) {
+    auto it = locals.find(var->name);
+    if (it == locals.end()) {
+      fprintf(stderr, "Error: Unknown variable '%s' for lvalue.\n",
+              var->name.c_str());
+      std::abort();
+    }
+    return it->second.alloca; // pointer to store into
+  } else if (auto *un = dynamic_cast<UnaryExpr *>(expr)) {
+    if (un->op == TokenType::Star) {
+      // dereference: lvalue is the pointer itself
+      return genExpr(un->operand);
+    }
+  }
+  fprintf(stderr, "Error: Expression cannot be used as lvalue.\n");
   std::abort();
 }

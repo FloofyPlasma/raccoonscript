@@ -1,8 +1,8 @@
 let variable: i32 = 55;
 let testVar: i64;
 
-let testString = "hello, world";
-let testString2 = "another string";
+let testString: i32* = "hello, world";
+let testString2: i32* = "another string";
 
 let charLiteral = 'A';
 
@@ -43,8 +43,14 @@ fun testPointers(): void {
 }
 
 fun main(): i32 {
-    testFun(5);You
+    let retVal = testFun(5);
     testPointers();
+
+    let heapInt: i32* = malloc<i32>(1);
+    let heapInit: i64* = malloc<i64>(4);
+    *heapInt = 123;
+    free(heapInt);
+    free(heapInit);
 
     return 0;
 }

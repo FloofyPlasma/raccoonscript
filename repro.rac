@@ -1,0 +1,6 @@
+fun main(): void {
+    let x: i32 = 42;
+    let ptr_tst: i32* = &x;         
+    let y: i32 = *ptr_tst;           
+    *ptr_tst = 100;                
+}

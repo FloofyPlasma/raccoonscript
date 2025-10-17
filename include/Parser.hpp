@@ -17,7 +17,7 @@ public:
 
   Statement *parseStatement(bool insideFunction = false);
 
-  Statement *parseVarDecl();
+  Statement *parseVarDecl(bool isConst);
 
   Statement *parseFunctionDecl();
 

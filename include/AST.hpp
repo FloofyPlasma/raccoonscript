@@ -64,8 +64,9 @@ struct VarDecl : Statement {
   std::string name;
   std::string type;
   Expr *initializer;
-  VarDecl(std::string n, std::string t, Expr *i)
-      : name(n), type(t), initializer(i) {}
+  bool isConst;
+  VarDecl(std::string n, std::string t, Expr *i, bool isC)
+      : name(n), type(t), initializer(i), isConst(isC) {}
 };
 
 struct FunctionDecl : Statement {

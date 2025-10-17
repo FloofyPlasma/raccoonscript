@@ -189,7 +189,7 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
     llvm::AllocaInst *alloca =
         builder->CreateAlloca(llvmTy, nullptr, varDecl->name);
 
-    locals[varDecl->name] = {alloca, llvmTy};
+    locals[varDecl->name] = {alloca, llvmTy, varDecl->isConst};
 
     // Restore insertion point
     builder->restoreIP(oldIP);
@@ -558,7 +558,8 @@ llvm::Value *Codegen::genUnaryExpr(UnaryExpr *expr) {
       fprintf(stderr, "Error: Attempt to dereference non-pointer type.\n");
       std::abort();
     }
-    return builder->CreateLoad(ptrType->getContainedType(0), operandVal, "deref");
+    return builder->CreateLoad(ptrType->getContainedType(0), operandVal,
+                               "deref");
   }
   default: {
     llvm::Value *operand = this->genExpr(expr->operand);
@@ -601,6 +602,11 @@ llvm::Value *Codegen::genExprLValue(Expr *expr) {
     auto it = locals.find(var->name);
     if (it == locals.end()) {
       fprintf(stderr, "Error: Unknown variable '%s' for lvalue.\n",
+              var->name.c_str());
+      std::abort();
+    }
+    if (it->second.isConst) {
+      fprintf(stderr, "Error: Cannot assign to constant variable '%s'.\n",
               var->name.c_str());
       std::abort();
     }

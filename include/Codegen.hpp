@@ -15,6 +15,7 @@
 struct LocalVar {
   llvm::AllocaInst *alloca;
   llvm::Type *type;
+  bool isConst;
 };
 
 class Codegen {

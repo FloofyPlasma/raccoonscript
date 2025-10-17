@@ -45,6 +45,8 @@ fun main(): i32 {
     let retVal = testFun(5);
     testPointers();
 
+    const testConst: i32 = 5;
+
     let heapInt: i32* = malloc<i32>(1);
     let heapInit: i64* = malloc<i64>(4);
     *heapInt = 123;

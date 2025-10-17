@@ -8,8 +8,12 @@ void Parser::advance() { this->current = this->lexer.nextToken(); }
 
 Statement *Parser::parseStatement(bool insideFunction) {
   if (this->current.type == TokenType::Keyword &&
-      this->current.lexeme == "let") {
-    return this->parseVarDecl();
+      (this->current.lexeme == "let" || this->current.lexeme == "const")) {
+    bool isConst = (this->current.lexeme == "const");
+
+    this->advance(); // consume 'let' or 'const'
+
+    return this->parseVarDecl(isConst);
   }
 
   if (!insideFunction && this->current.type == TokenType::Keyword &&
@@ -44,8 +48,7 @@ Statement *Parser::parseStatement(bool insideFunction) {
   return this->parseExpressionStatement();
 }
 
-Statement *Parser::parseVarDecl() {
-  this->advance(); // consume 'let'
+Statement *Parser::parseVarDecl(bool isConst) {
   if (this->current.type != TokenType::Identifier) {
     return nullptr; // error
   }
@@ -90,7 +93,7 @@ Statement *Parser::parseVarDecl() {
 
   this->advance(); // consume ';'
 
-  return new VarDecl{name, type, initializer};
+  return new VarDecl{name, type, initializer, isConst};
 }
 
 Statement *Parser::parseFunctionDecl() {
@@ -322,17 +325,22 @@ Expr *Parser::parsePrimary() {
 }
 
 int Parser::getPrecedence(TokenType type) {
-  switch(type) {
-    case TokenType::Star:
-    case TokenType::Slash: return 30;
-    case TokenType::Plus:
-    case TokenType::Minus: return 20;
-    case TokenType::LessThan:
-    case TokenType::LessEqual:
-    case TokenType::GreaterThan:
-    case TokenType::GreaterEqual: return 10;
-    case TokenType::Equal: return 5;
-    default: return -1;
+  switch (type) {
+  case TokenType::Star:
+  case TokenType::Slash:
+    return 30;
+  case TokenType::Plus:
+  case TokenType::Minus:
+    return 20;
+  case TokenType::LessThan:
+  case TokenType::LessEqual:
+  case TokenType::GreaterThan:
+  case TokenType::GreaterEqual:
+    return 10;
+  case TokenType::Equal:
+    return 5;
+  default:
+    return -1;
   }
 }
 
@@ -504,8 +512,14 @@ Statement *Parser::parseForStatement() {
   this->advance(); // consume '('
 
   Statement *initializer = nullptr;
-  if (this->current.lexeme == "let") {
-    initializer = this->parseVarDecl();
+  if (this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "let") {
+    this->advance();
+    initializer = this->parseVarDecl(false);
+  } else if (this->current.type == TokenType::Keyword &&
+             this->current.lexeme == "const") {
+    this->advance();
+    initializer = this->parseVarDecl(true);
   } else if (this->current.type != TokenType::Semicolon) {
     initializer = this->parseExpressionStatement();
   }

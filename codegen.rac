@@ -37,8 +37,9 @@ fun testFun3(): void {
 
 fun testPointers(): void {
     let x: i32 = 42;
-    let ptr_tst: i32* = &x;                  
-    *ptr_tst = 100;                
+    let ptr_tst: i32* = &x;
+    let y: i32 = *ptr_tst;
+    *ptr_tst = 100;
 }
 
 fun main(): i32 {

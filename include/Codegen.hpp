@@ -15,6 +15,7 @@
 struct LocalVar {
   llvm::AllocaInst *alloca;
   llvm::Type *type;
+  std::string typeStr;
   bool isConst;
 };
 
@@ -32,6 +33,13 @@ private:
   std::unique_ptr<llvm::Module> module;
   std::unique_ptr<llvm::IRBuilder<>> builder;
   std::unordered_map<std::string, LocalVar> locals;
+
+  static std::string getPointedToType(const std::string &ptrType) {
+    if (ptrType.empty() || ptrType.back() != '*') {
+      return "";
+    }
+    return ptrType.substr(0, ptrType.size() - 1);
+  }
 
   static llvm::Type *getLLVMType(const std::string &type,
                                  llvm::LLVMContext &ctx);

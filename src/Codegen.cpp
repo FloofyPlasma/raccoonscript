@@ -189,7 +189,7 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
     llvm::AllocaInst *alloca =
         builder->CreateAlloca(llvmTy, nullptr, varDecl->name);
 
-    locals[varDecl->name] = {alloca, llvmTy, varDecl->isConst};
+    locals[varDecl->name] = {alloca, llvmTy, varDecl->type, varDecl->isConst};
 
     // Restore insertion point
     builder->restoreIP(oldIP);
@@ -260,7 +260,8 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
     llvm::AllocaInst *alloca =
         tmpBuilder.CreateAlloca(arg.getType(), nullptr, arg.getName());
     builder->CreateStore(&arg, alloca);
-    locals[arg.getName().str()] = {alloca, arg.getType()};
+    locals[arg.getName().str()] = {alloca, arg.getType(),
+                                   funcDecl->params[idx].second};
     idx++;
   }
 
@@ -551,15 +552,31 @@ llvm::Value *Codegen::genUnaryExpr(UnaryExpr *expr) {
     }
   }
   case TokenType::Star: { // *ptr
-    llvm::Value *operandVal = this->genExpr(expr->operand);
-    llvm::PointerType *ptrType =
-        llvm::dyn_cast<llvm::PointerType>(operandVal->getType());
-    if (!ptrType) {
-      fprintf(stderr, "Error: Attempt to dereference non-pointer type.\n");
+    if (auto *var = dynamic_cast<Variable *>(expr->operand)) {
+      auto it = this->locals.find(var->name);
+      if (it == this->locals.end()) {
+        fprintf(stderr, "Error: Unknown variable '%s' for dereference.\n",
+                var->name.c_str());
+        std::abort();
+      }
+
+      std::string pointedToTypeStr = this->getPointedToType(it->second.typeStr);
+      if (pointedToTypeStr.empty()) {
+        fprintf(stderr,
+                "Error: Attempt to dereference non-pointer variable '%s'.\n",
+                var->name.c_str());
+        std::abort();
+      }
+
+      llvm::Type *pointedToType = getLLVMType(pointedToTypeStr, context);
+      llvm::Value *ptrVal = this->genExpr(expr->operand);
+
+      return builder->CreateLoad(pointedToType, ptrVal, "deref");
+    } else {
+      fprintf(stderr,
+              "Error: Dereference of complex expressions not yet supported.\n");
       std::abort();
     }
-    return builder->CreateLoad(ptrType->getContainedType(0), operandVal,
-                               "deref");
   }
   default: {
     llvm::Value *operand = this->genExpr(expr->operand);

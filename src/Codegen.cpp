@@ -99,14 +99,15 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
 
 Codegen::Codegen(const std::string &moduleName)
     : module(std::make_unique<Module>(moduleName, context)),
-      builder(std::make_unique<IRBuilder<>>(context)) {}
+      builder(std::make_unique<IRBuilder<>>(context)) {
+  this->pushScope();
+}
 
-Codegen::~Codegen() { locals.clear(); }
+Codegen::~Codegen() { this->scopeStack.clear(); }
 
 void Codegen::generate(const std::vector<Statement *> &statements) {
-  locals.clear();
   for (auto *stmt : statements) {
-    genStatement(stmt);
+    this->genStatement(stmt);
   }
 }
 
@@ -116,19 +117,20 @@ llvm::Value *Codegen::genExpr(Expr *expr) {
   if (auto *intLit = dynamic_cast<IntLiteral *>(expr)) {
     return llvm::ConstantInt::get(getLLVMType("i32", context), intLit->value);
   } else if (auto *var = dynamic_cast<Variable *>(expr)) {
-    // Check local first
-    auto it = locals.find(var->name);
-    if (it != locals.end()) {
-      return builder->CreateLoad(it->second.alloca->getAllocatedType(),
-                                 it->second.alloca, var->name);
+    LocalVar *localVar = this->findVariable(var->name);
+
+    if (localVar->alloca == nullptr) {
+      if (auto *global = this->module->getGlobalVariable(var->name)) {
+        return this->builder->CreateLoad(global->getValueType(), global,
+                                         var->name);
+      }
+      fprintf(stderr, "Error: Global variable '%s' not found in module.\n",
+              var->name.c_str());
+      std::abort();
     }
 
-    // Check global
-    if (auto *global = module->getGlobalVariable(var->name)) {
-      return builder->CreateLoad(global->getValueType(), global, var->name);
-    }
-
-    return nullptr;
+    return this->builder->CreateLoad(localVar->alloca->getAllocatedType(),
+                                     localVar->alloca, var->name);
   } else if (auto *binExp = dynamic_cast<BinaryExpr *>(expr)) {
     return this->genBinaryExpr(binExp);
   } else if (auto *callExp = dynamic_cast<CallExpr *>(expr)) {
@@ -151,12 +153,13 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
     llvm::Constant *init = llvm::ConstantInt::get(llvmTy, 0);
 
     if (varDecl->initializer) {
-      llvm::Value *initVal = genExpr(varDecl->initializer);
+      llvm::Value *initVal = this->genExpr(varDecl->initializer);
       if (!initVal) {
         fprintf(stderr, "Error: Global variable '%s' initializer is invalid.\n",
                 varDecl->name.c_str());
         std::abort();
       }
+
       if (auto *constInit = llvm::dyn_cast<llvm::Constant>(initVal)) {
         init = constInit;
       } else {
@@ -167,9 +170,20 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
       }
     }
 
-    new llvm::GlobalVariable(*module, llvmTy, false,
-                             llvm::GlobalValue::ExternalLinkage, init,
-                             varDecl->name);
+    llvm::GlobalVariable *globalVar = new llvm::GlobalVariable(
+        *module, llvmTy, false, llvm::GlobalValue::ExternalLinkage, init,
+        varDecl->name);
+
+    if (this->scopeStack.empty()) {
+      fprintf(stderr, "Error: No global scope available.\nThis error should "
+                      "never happen.\nSomething went terribly wrong.\n");
+      std::abort();
+    }
+
+    // Global varaibles don't have an alloca pointer, findVariable will handle
+    // this case.
+    this->scopeStack[0][varDecl->name] = {nullptr, llvmTy, varDecl->type,
+                                          varDecl->isConst};
   } else {
     // Local variable: ensure inside a function
     llvm::Function *func = builder->GetInsertBlock()->getParent();
@@ -189,7 +203,8 @@ void Codegen::genVarDecl(VarDecl *varDecl) {
     llvm::AllocaInst *alloca =
         builder->CreateAlloca(llvmTy, nullptr, varDecl->name);
 
-    locals[varDecl->name] = {alloca, llvmTy, varDecl->type, varDecl->isConst};
+    this->addVariable(varDecl->name,
+                      {alloca, llvmTy, varDecl->type, varDecl->isConst});
 
     // Restore insertion point
     builder->restoreIP(oldIP);
@@ -226,6 +241,9 @@ void Codegen::genStatement(Statement *stmt) {
   } else if (auto *whileStmt = dynamic_cast<WhileStmt *>(stmt)) {
     this->genWhileStatement(whileStmt);
     return;
+  } else if (auto *blockStmt = dynamic_cast<BlockStmt *>(stmt)) {
+    this->genBlockStatement(blockStmt);
+    return;
   }
   // ...other statements...
 }
@@ -251,7 +269,8 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
   builder->SetInsertPoint(entry);
 
   // Map function args to locals
-  locals.clear();
+  this->pushScope();
+
   unsigned idx = 0;
   for (auto &arg : function->args()) {
     arg.setName(funcDecl->params[idx].first);
@@ -260,8 +279,8 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
     llvm::AllocaInst *alloca =
         tmpBuilder.CreateAlloca(arg.getType(), nullptr, arg.getName());
     builder->CreateStore(&arg, alloca);
-    locals[arg.getName().str()] = {alloca, arg.getType(),
-                                   funcDecl->params[idx].second};
+    this->addVariable(arg.getName().str(),
+                      {alloca, arg.getType(), funcDecl->params[idx].second});
     idx++;
   }
 
@@ -270,7 +289,9 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
     this->genStatement(stmt);
   }
 
-  // If function returns void and no explitit return, insert return
+  this->popScope();
+
+  // If function returns void and no explicit return, insert return
   if (retTy->isVoidTy()) {
     builder->CreateRetVoid();
   }
@@ -538,29 +559,24 @@ llvm::Value *Codegen::genUnaryExpr(UnaryExpr *expr) {
   switch (expr->op) {
   case TokenType::Ampersand: { // &var
     if (auto *var = dynamic_cast<Variable *>(expr->operand)) {
-      llvm::Value *lval =
-          this->findLValueStorage(this->module.get(), this->locals, var->name);
-      if (!lval) {
-        fprintf(stderr, "Error: Unknown variable '%s' for address-of.\n",
-                var->name.c_str());
-        std::abort();
-      }
-      return lval; // return pointer
-    } else {
-      fprintf(stderr, "Error: Address-of operand must be a variable.\n");
-      std::abort();
-    }
-  }
-  case TokenType::Star: { // *ptr
-    if (auto *var = dynamic_cast<Variable *>(expr->operand)) {
-      auto it = this->locals.find(var->name);
-      if (it == this->locals.end()) {
-        fprintf(stderr, "Error: Unknown variable '%s' for dereference.\n",
+      LocalVar *localVar = this->findVariable(var->name);
+
+      if (localVar->alloca == nullptr) {
+        if (auto *global = this->module->getGlobalVariable(var->name)) {
+          return global;
+        }
+        fprintf(stderr, "Error: Global variable '%s' not found.\n",
                 var->name.c_str());
         std::abort();
       }
 
-      std::string pointedToTypeStr = this->getPointedToType(it->second.typeStr);
+      return localVar->alloca;
+    }
+  case TokenType::Star: { // *ptr
+    if (auto *var = dynamic_cast<Variable *>(expr->operand)) {
+      LocalVar *localVar = this->findVariable(var->name);
+
+      std::string pointedToTypeStr = this->getPointedToType(localVar->typeStr);
       if (pointedToTypeStr.empty()) {
         fprintf(stderr,
                 "Error: Attempt to dereference non-pointer variable '%s'.\n",
@@ -568,10 +584,11 @@ llvm::Value *Codegen::genUnaryExpr(UnaryExpr *expr) {
         std::abort();
       }
 
-      llvm::Type *pointedToType = getLLVMType(pointedToTypeStr, context);
+      llvm::Type *pointedToType =
+          this->getLLVMType(pointedToTypeStr, this->context);
       llvm::Value *ptrVal = this->genExpr(expr->operand);
 
-      return builder->CreateLoad(pointedToType, ptrVal, "deref");
+      return this->builder->CreateLoad(pointedToType, ptrVal, "deref");
     } else {
       fprintf(stderr,
               "Error: Dereference of complex expressions not yet supported.\n");
@@ -588,18 +605,23 @@ llvm::Value *Codegen::genUnaryExpr(UnaryExpr *expr) {
     std::abort();
   }
   }
+  }
 }
 
 llvm::Value *Codegen::genLValue(Expr *expr) {
   if (auto *var = dynamic_cast<Variable *>(expr)) {
-    llvm::Value *lval =
-        this->findLValueStorage(this->module.get(), this->locals, var->name);
-    if (!lval) {
-      fprintf(stderr, "Error: Unknown variable '%s' for lvalue.\n",
+    LocalVar *localVar = this->findVariable(var->name);
+
+    if (localVar->alloca == nullptr) {
+      if (auto *global = this->module->getGlobalVariable(var->name)) {
+        return global;
+      }
+      fprintf(stderr, "Error: Global variable '%s' not found.\n",
               var->name.c_str());
       std::abort();
     }
-    return lval; // pointer
+
+    return localVar->alloca;
   } else if (auto *unary = dynamic_cast<UnaryExpr *>(expr)) {
     if (unary->op == TokenType::Star) {
       llvm::Value *ptr = this->genExpr(unary->operand);
@@ -616,24 +638,75 @@ llvm::Value *Codegen::genLValue(Expr *expr) {
 
 llvm::Value *Codegen::genExprLValue(Expr *expr) {
   if (auto *var = dynamic_cast<Variable *>(expr)) {
-    auto it = locals.find(var->name);
-    if (it == locals.end()) {
-      fprintf(stderr, "Error: Unknown variable '%s' for lvalue.\n",
-              var->name.c_str());
-      std::abort();
-    }
-    if (it->second.isConst) {
+    LocalVar *localVar = this->findVariable(var->name);
+
+    if (localVar->isConst) {
       fprintf(stderr, "Error: Cannot assign to constant variable '%s'.\n",
               var->name.c_str());
       std::abort();
     }
-    return it->second.alloca; // pointer to store into
+
+    if (localVar->alloca == nullptr) {
+      if (auto *global = this->module->getGlobalVariable(var->name)) {
+        fprintf(stderr, "Error: Global variable '%s' not found.\n",
+                var->name.c_str());
+        std::abort();
+      }
+    }
+
+    return localVar->alloca;
   } else if (auto *un = dynamic_cast<UnaryExpr *>(expr)) {
     if (un->op == TokenType::Star) {
-      // dereference: lvalue is the pointer itself
-      return genExpr(un->operand);
+      return this->genExpr(un->operand);
     }
   }
   fprintf(stderr, "Error: Expression cannot be used as lvalue.\n");
   std::abort();
+}
+
+void Codegen::genBlockStatement(BlockStmt *stmt) {
+  this->pushScope();
+  for (auto *s : stmt->statements) {
+    this->genStatement(s);
+  }
+  this->popScope();
+}
+
+// MARK: Scope mgmt
+
+void Codegen::pushScope() {
+  this->scopeStack.push_back(std::unordered_map<std::string, LocalVar>());
+}
+
+void Codegen::popScope() {
+  if (this->scopeStack.empty()) {
+    fprintf(stderr, "Error: Attempted to pop from an empty scope stack.\n");
+    std::abort();
+  }
+  this->scopeStack.pop_back();
+}
+
+LocalVar *Codegen::findVariable(const std::string &name) {
+  // note to self: top of the stack is the innermost scope
+  // i sometimes forget this because im big dumb
+  for (auto it = this->scopeStack.rbegin(); it != this->scopeStack.rend();
+       ++it) {
+    auto varIt = it->find(name);
+    if (varIt != it->end()) {
+      return &varIt->second;
+    }
+  }
+
+  fprintf(stderr, "Error: Undefined variable '%s'.\n", name.c_str());
+  std::abort();
+}
+
+void Codegen::addVariable(const std::string &name, const LocalVar &var) {
+  if (this->scopeStack.empty()) {
+    fprintf(stderr, "Error: No active scope to add the variable '%s'.\n",
+            name.c_str());
+    std::abort();
+  }
+
+  this->scopeStack.back()[name] = var;
 }

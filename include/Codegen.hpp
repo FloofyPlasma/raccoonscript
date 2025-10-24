@@ -32,7 +32,7 @@ private:
   llvm::LLVMContext context;
   std::unique_ptr<llvm::Module> module;
   std::unique_ptr<llvm::IRBuilder<>> builder;
-  std::unordered_map<std::string, LocalVar> locals;
+  std::vector<std::unordered_map<std::string, LocalVar>> scopeStack;
 
   static std::string getPointedToType(const std::string &ptrType) {
     if (ptrType.empty() || ptrType.back() != '*') {
@@ -50,10 +50,17 @@ private:
                                           llvm::Type *toTy);
 
   /// find l-value storage for a variable name (local alloca or global variable)
+  [[deprecated("Use Codegen::findVariable(name) instead.")]]
   static llvm::Value *
   findLValueStorage(llvm::Module *module,
                     std::unordered_map<std::string, LocalVar> &locals,
-                    const std::string &name);
+                    const std::string &name) ;
+
+  // Scope management
+  void pushScope();
+  void popScope();
+  LocalVar *findVariable(const std::string &name);
+  void addVariable(const std::string &name, const LocalVar &var);
 
   llvm::Value *genExpr(Expr *expr);
   llvm::Value *genBinaryExpr(BinaryExpr *expr);
@@ -72,4 +79,5 @@ private:
   void genIfStatement(IfStmt *stmt);
   void genWhileStatement(WhileStmt *stmt);
   // void genForStatement(ForStmt* stmt);
+  void genBlockStatement(BlockStmt *stmt);
 };

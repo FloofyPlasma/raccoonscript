@@ -50,10 +50,11 @@ private:
                                           llvm::Type *toTy);
 
   /// find l-value storage for a variable name (local alloca or global variable)
+  [[deprecated("Use Codegen::findVariable(name) instead.")]]
   static llvm::Value *
   findLValueStorage(llvm::Module *module,
                     std::unordered_map<std::string, LocalVar> &locals,
-                    const std::string &name);
+                    const std::string &name) ;
 
   // Scope management
   void pushScope();

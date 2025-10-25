@@ -527,7 +527,6 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
   }
   }
 }
-
 void Codegen::genIfStatement(IfStmt *stmt) {
   llvm::Value *condVal = this->genExpr(stmt->condition);
   if (!condVal) {
@@ -555,23 +554,29 @@ void Codegen::genIfStatement(IfStmt *stmt) {
     this->builder->CreateCondBr(condVal, thenBB, mergeBB);
   }
 
-  // then block
+  // THEN block
   this->builder->SetInsertPoint(thenBB);
   for (auto *s : stmt->thenBranch) {
     this->genStatement(s);
   }
-  this->builder->CreateBr(mergeBB);
 
-  // Else block
+  // only add branch if block isn't already terminated
+  if (!this->builder->GetInsertBlock()->getTerminator()) {
+    this->builder->CreateBr(mergeBB);
+  }
+
+  // ELSE block
   if (elseBB) {
     this->builder->SetInsertPoint(elseBB);
     for (auto *s : stmt->elseBranch) {
       this->genStatement(s);
     }
-    this->builder->CreateBr(mergeBB);
+
+    if (!this->builder->GetInsertBlock()->getTerminator()) {
+      this->builder->CreateBr(mergeBB);
+    }
   }
 
-  // continue after if
   this->builder->SetInsertPoint(mergeBB);
 }
 

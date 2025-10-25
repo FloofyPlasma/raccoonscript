@@ -11,8 +11,8 @@ struct Expr {
 };
 
 struct IntLiteral : Expr {
-  int value;
-  IntLiteral(int v) : value(v) {}
+  long long value;
+  IntLiteral(long long v) : value(v) {}
 };
 
 struct FloatLiteral : Expr {

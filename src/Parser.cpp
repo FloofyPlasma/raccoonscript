@@ -223,7 +223,7 @@ Expr *Parser::parseExpression(int precedence) {
 
 Expr *Parser::parsePrimary() {
   if (this->current.type == TokenType::IntLiteral) {
-    int value = std::stoi(this->current.lexeme);
+    int value = std::stoll(this->current.lexeme);
     this->advance(); // consume integer literal
     return new IntLiteral(value);
   }

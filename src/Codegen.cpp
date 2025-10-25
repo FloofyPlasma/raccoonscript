@@ -81,6 +81,11 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
     return llvm::Type::getInt128Ty(ctx);
   }
 
+  if (type == "usize") {
+    return llvm::Type::getInt64Ty(ctx);
+    // TODO: Use data layout for actual pointer size
+  }
+
   if (type == "f32") {
     return llvm::Type::getFloatTy(ctx);
   }
@@ -352,6 +357,9 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
 
   bool isFloat = lhs->getType()->isFloatingPointTy();
 
+  std::string lhsTypeStr = this->getExprTypeStr(expr->left);
+  bool isUnsigned = this->isUnsignedType(lhsTypeStr);
+
   switch (expr->op) {
   case TokenType::Plus: {
     if (isFloat) {
@@ -375,13 +383,19 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
     if (isFloat) {
       return this->builder->CreateFDiv(lhs, rhs, "fdivtmp");
     }
-    return this->builder->CreateSDiv(lhs, rhs, "divtmp");
+    if (isUnsigned) {
+      return builder->CreateUDiv(lhs, rhs, "udivtmp");
+    }
+    return builder->CreateSDiv(lhs, rhs, "divtmp");
   }
   case TokenType::Percent: {
     if (isFloat) {
       return this->builder->CreateFRem(lhs, rhs, "fremtmp");
     }
-    return this->builder->CreateSRem(lhs, rhs, "remtmp");
+    if (isUnsigned) {
+      return builder->CreateURem(lhs, rhs, "uremtmp");
+    }
+    return builder->CreateSRem(lhs, rhs, "modtmp");
   }
   case TokenType::DoubleEqual: {
     llvm::Value *cmp;
@@ -407,6 +421,8 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
     llvm::Value *cmp;
     if (isFloat) {
       cmp = this->builder->CreateFCmpOLT(lhs, rhs, "flttmp");
+    } else if (isUnsigned) {
+      cmp = this->builder->CreateICmpULT(lhs, rhs, "ulttmp");
     } else {
       cmp = this->builder->CreateICmpSLT(lhs, rhs, "lttmp");
     }
@@ -417,6 +433,8 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
     llvm::Value *cmp;
     if (isFloat) {
       cmp = this->builder->CreateFCmpOLE(lhs, rhs, "fletmp");
+    } else if (isUnsigned) {
+      cmp = this->builder->CreateICmpULE(lhs, rhs, "uletmp");
     } else {
       cmp = this->builder->CreateICmpSLE(lhs, rhs, "letmp");
     }
@@ -427,6 +445,8 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
     llvm::Value *cmp;
     if (isFloat) {
       cmp = this->builder->CreateFCmpOGT(lhs, rhs, "fgttmp");
+    } else if (isUnsigned) {
+      cmp = this->builder->CreateICmpUGT(lhs, rhs, "ugttmp");
     } else {
       cmp = this->builder->CreateICmpSGT(lhs, rhs, "gttmp");
     }
@@ -437,6 +457,8 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
     llvm::Value *cmp;
     if (isFloat) {
       cmp = this->builder->CreateFCmpOGE(lhs, rhs, "fgetmp");
+    } else if (isUnsigned) {
+      cmp = this->builder->CreateICmpUGE(lhs, rhs, "ugetmp");
     } else {
       cmp = this->builder->CreateICmpSGE(lhs, rhs, "getmp");
     }

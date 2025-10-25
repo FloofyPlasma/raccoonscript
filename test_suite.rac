@@ -1,0 +1,121 @@
+// Test suite for RaccoonScript language features
+
+// ---- Variable declarations and basic types ----
+fun test_basic_types(): i32 {
+    let passed: i32 = 0;
+    
+    let int_test: i32 = 42;
+    let long_test: i64 = 123456789;
+    let float_test: f32 = 3.14;
+    let char_test: char = 'X';
+    let str_test: char* = "test string";
+    
+    // Test integer operations
+    if (int_test == 42) { passed = passed + 1; }
+    
+    // Test long integer
+    if (long_test > 123456788) { passed = passed + 1; }
+    
+    // Test float comparison
+    if (float_test > 3.13 && float_test < 3.15) { passed = passed + 1; }
+    
+    // Test char comparison
+    if (char_test == 'X') { passed = passed + 1; }
+    
+    return passed;  // Should return 4 if all pass
+}
+
+// ---- Test pointer operations ----
+fun test_pointers(): i32 {
+    let passed: i32 = 0;
+    
+    // Basic pointer test
+    let x: i32 = 100;
+    let ptr: i32* = &x;
+    *ptr = 200;
+    if (x == 200) { passed = passed + 1; }
+    
+    // Heap allocation test
+    let heap_ptr: i32* = malloc<i32>(1);
+    *heap_ptr = 42;
+    if (*heap_ptr == 42) { passed = passed + 1; }
+    free(heap_ptr);
+    
+    return passed;  // Should return 2 if all pass
+}
+
+// ---- Test control flow ----
+fun test_control_flow(): i32 {
+    let passed: i32 = 0;
+    
+    // If-else test
+    let x: i32 = 10;
+    if (x > 5) {
+        passed = passed + 1;
+    } else {
+        passed = passed - 1;
+    }
+    
+    // While loop test
+    let counter: i32 = 0;
+    let sum: i32 = 0;
+    while (counter < 5) {
+        sum = sum + counter;
+        counter = counter + 1;
+    }
+    if (sum == 10) { passed = passed + 1; }  // 0+1+2+3+4 = 10
+    
+    // For loop test
+    sum = 0;
+    for (let i = 0; i < 4; i = i + 1) {
+        sum = sum + i;
+    }
+    if (sum == 6) { passed = passed + 1; }  // 0+1+2+3 = 6
+    
+    return passed;  // Should return 3 if all pass
+}
+
+// ---- Test scoping ----
+fun test_scoping(): i32 {
+    let passed: i32 = 0;
+    
+    let x: i32 = 1;
+    {
+        let x: i32 = 2;
+        if (x == 2) { passed = passed + 1; }
+    }
+    if (x == 1) { passed = passed + 1; }
+    
+    return passed;  // Should return 2 if all pass
+}
+
+// ---- Test function calls ----
+fun helper_function(a: i32, b: i32): i32 {
+    return a + b;
+}
+
+fun test_functions(): i32 {
+    let passed: i32 = 0;
+    
+    let result: i32 = helper_function(5, 3);
+    if (result == 8) { passed = passed + 1; }
+    
+    return passed;  // Should return 1 if all pass
+}
+
+// ---- Main test runner ----
+fun main(): i32 {
+    let total_passed: i32 = 0;
+    let total_tests: i32 = 12;  // Update this when adding new tests
+    
+    // Run all test suites
+    total_passed = total_passed + test_basic_types();    // 4 tests
+    total_passed = total_passed + test_pointers();       // 2 tests
+    total_passed = total_passed + test_control_flow();   // 3 tests
+    total_passed = total_passed + test_scoping();        // 2 tests
+    total_passed = total_passed + test_functions();      // 1 test
+    
+    // Print could be added here when supported
+    
+    return total_passed;  // Should return 12 if all tests pass
+}

@@ -33,6 +33,7 @@ private:
   std::unique_ptr<llvm::Module> module;
   std::unique_ptr<llvm::IRBuilder<>> builder;
   std::vector<std::unordered_map<std::string, LocalVar>> scopeStack;
+  std::unordered_map<std::string, llvm::StructType *> structTypes;
 
   static std::string getPointedToType(const std::string &ptrType) {
     if (ptrType.empty() || ptrType.back() != '*') {
@@ -108,4 +109,9 @@ private:
   void genWhileStatement(WhileStmt *stmt);
   void genForStatement(ForStmt *stmt);
   void genBlockStatement(BlockStmt *stmt);
+
+  // Structs
+  void genStructDecl(StructDecl *structDecl);
+  llvm::Value *genStructLiteral(StructLiteral *expr);
+  llvm::Value *genMemberAccessExpr(MemberAccessExpr *expr);
 };

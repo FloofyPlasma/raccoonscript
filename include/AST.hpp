@@ -35,6 +35,13 @@ struct CharLiteral : Expr {
   CharLiteral(char v) : value(v) {}
 };
 
+struct StructLiteral : Expr {
+  std::string typeName;
+  std::vector<std::pair<std::string, Expr *>> fields; // field name + value
+  StructLiteral(std::string t, std::vector<std::pair<std::string, Expr *>> f)
+      : typeName(t), fields(f) {}
+};
+
 struct UnaryExpr : Expr {
   TokenType op;
   Expr *operand;
@@ -61,6 +68,12 @@ struct CallExpr : Expr {
       : name(n), args(a), type(t) {}
 };
 
+struct MemberAccessExpr : Expr {
+  Expr *object;
+  std::string field;
+  MemberAccessExpr(Expr *obj, std::string f) : object(obj), field(f) {}
+};
+
 struct Statement {
   virtual ~Statement() = default;
 };
@@ -83,6 +96,13 @@ struct FunctionDecl : Statement {
                std::vector<std::pair<std::string, std::string>> p,
                std::vector<Statement *> b, std::string r)
       : name(n), params(p), body(b), returnType(r) {}
+};
+
+struct StructDecl : Statement {
+  std::string name;
+  std::vector<std::pair<std::string, std::string>> fields; // name + type
+  StructDecl(std::string n, std::vector<std::pair<std::string, std::string>> f)
+      : name(n), fields(f) {}
 };
 
 struct ExprStmt : Statement {

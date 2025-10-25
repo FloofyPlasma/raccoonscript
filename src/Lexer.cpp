@@ -37,6 +37,10 @@ Token Lexer::nextToken() {
     this->pos++;
     return {TokenType::Slash, "/", this->line, this->column++};
   }
+  case '.': {
+    this->pos++;
+    return {TokenType::Dot, ".", this->line, this->column++};
+  }
   case '=': {
     this->pos++;
     if (this->pos < this->source.size() && this->source[pos] == '=') {

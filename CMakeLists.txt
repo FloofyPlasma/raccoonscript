@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(RaccoonCompiler LANGUAGES C CXX)
-find_package(LLVM 20.1.8 REQUIRED CONFIG)
+find_package(LLVM 21.1.4 REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")

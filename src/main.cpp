@@ -38,13 +38,13 @@ int main(int argc, const char *argv[]) {
     program.push_back(stmt);
   }
 
-  std::cout << "AST:\n";
-  for (auto stmt : program) {
-    printStatement(stmt);
-  }
+  //   std::cout << "AST:\n";
+  //   for (auto stmt : program) {
+  //     printStatement(stmt);
+  //   }
 
-  std::cout << "\n\n====================\nBeginning "
-               "codegen...\n====================\n\n";
+  //   std::cout << "\n\n====================\nBeginning "
+  //                "codegen...\n====================\n\n";
   Codegen codegen("RaccoonModule");
   codegen.generate(program);
 

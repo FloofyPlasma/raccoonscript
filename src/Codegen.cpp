@@ -49,6 +49,16 @@ Codegen::findLValueStorage(llvm::Module *module,
 }
 
 llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
+  if (type.back() == '*') {
+    return llvm::PointerType::getUnqual(
+        getLLVMType(type.substr(0, type.size() - 1), ctx));
+  }
+
+  auto it = this->structTypes.find(type);
+  if (it != this->structTypes.end()) {
+    return it->second;
+  }
+
   if (type == "i8") {
     return llvm::Type::getInt8Ty(ctx);
   }
@@ -105,11 +115,6 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
     return llvm::Type::getInt8Ty(ctx);
   }
 
-  if (type.back() == '*') {
-    return llvm::PointerType::getUnqual(
-        getLLVMType(type.substr(0, type.size() - 1), ctx));
-  }
-
   return llvm::Type::getInt32Ty(ctx);
 }
 
@@ -163,6 +168,10 @@ llvm::Value *Codegen::genExpr(Expr *expr) {
     return this->genStringLiteral(stringLiteral->value);
   } else if (auto *unary = dynamic_cast<UnaryExpr *>(expr)) {
     return this->genUnaryExpr(unary);
+  } else if (auto *structLit = dynamic_cast<StructLiteral *>(expr)) {
+    return this->genStructLiteral(structLit);
+  } else if (auto *memberAccess = dynamic_cast<MemberAccessExpr *>(expr)) {
+    return this->genMemberAccessExpr(memberAccess);
   }
   return nullptr;
 }
@@ -250,6 +259,9 @@ void Codegen::genStatement(Statement *stmt) {
     return;
   } else if (auto *funDecl = dynamic_cast<FunctionDecl *>(stmt)) {
     this->genFunction(funDecl);
+    return;
+  } else if (auto *structDecl = dynamic_cast<StructDecl *>(stmt)) {
+    this->genStructDecl(structDecl);
     return;
   } else if (auto *retStmt = dynamic_cast<ReturnStmt *>(stmt)) {
     this->genReturnStatement(retStmt);
@@ -353,6 +365,32 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
   if (!lhs || !rhs) {
     fprintf(stderr, "Error: Invalid operands in binary expression.\n");
     std::abort();
+  }
+
+  llvm::Type *lhsType = lhs->getType();
+  llvm::Type *rhsType = rhs->getType();
+
+  if (lhsType != rhsType) {
+    // If one is float and other is int, convert int to float
+    if (lhsType->isFloatingPointTy() && rhsType->isIntegerTy()) {
+      rhs = this->builder->CreateSIToFP(rhs, lhsType, "inttofp");
+      rhsType = lhsType;
+    } else if (lhsType->isIntegerTy() && rhsType->isFloatingPointTy()) {
+      lhs = this->builder->CreateSIToFP(lhs, rhsType, "inttofp");
+      lhsType = rhsType;
+    }
+    // If both are integers but different widths, extend to wider
+    else if (lhsType->isIntegerTy() && rhsType->isIntegerTy()) {
+      auto *lhsInt = llvm::cast<llvm::IntegerType>(lhsType);
+      auto *rhsInt = llvm::cast<llvm::IntegerType>(rhsType);
+      if (lhsInt->getBitWidth() < rhsInt->getBitWidth()) {
+        lhs = this->builder->CreateSExt(lhs, rhsType, "sext");
+        lhsType = rhsType;
+      } else if (lhsInt->getBitWidth() > rhsInt->getBitWidth()) {
+        rhs = this->builder->CreateSExt(rhs, lhsType, "sext");
+        rhsType = lhsType;
+      }
+    }
   }
 
   bool isFloat = lhs->getType()->isFloatingPointTy();
@@ -495,6 +533,11 @@ void Codegen::genIfStatement(IfStmt *stmt) {
   if (!condVal) {
     fprintf(stderr, "Error: Invalid if condition.\n");
     std::abort();
+  }
+
+  if (condVal->getType()->isIntegerTy(8)) {
+    condVal = this->builder->CreateICmpNE(
+        condVal, llvm::ConstantInt::get(condVal->getType(), 0), "tobool");
   }
 
   llvm::Function *func = this->builder->GetInsertBlock()->getParent();
@@ -775,6 +818,89 @@ llvm::Value *Codegen::genLValue(Expr *expr) {
       return ptr; // pointer
     }
   }
+
+  else if (auto *memberAccess = dynamic_cast<MemberAccessExpr *>(expr)) {
+    llvm::Value *structPtr = nullptr;
+    llvm::StructType *structType = nullptr;
+    std::string structTypeName;
+
+    // (p.x)
+    if (auto *var = dynamic_cast<Variable *>(memberAccess->object)) {
+      LocalVar *localVar = this->findVariable(var->name);
+      structTypeName = localVar->typeStr;
+
+      if (!structTypeName.empty() && structTypeName.back() == '*') {
+        // Pointer to struct
+        structTypeName = structTypeName.substr(0, structTypeName.size() - 1);
+        structPtr =
+            this->builder->CreateLoad(localVar->alloca->getAllocatedType(),
+                                      localVar->alloca, var->name + "_load");
+      } else {
+        // Direct struct
+        structPtr = localVar->alloca;
+      }
+
+      auto it = this->structTypes.find(structTypeName);
+      if (it == this->structTypes.end()) {
+        fprintf(stderr, "Error: Unknown struct type '%s' in member access.\n",
+                structTypeName.c_str());
+        std::abort();
+      }
+      structType = it->second;
+
+      int fieldIndex = this->getFieldIndex(structTypeName, memberAccess->field);
+      return this->builder->CreateStructGEP(structType, structPtr, fieldIndex,
+                                            memberAccess->field + "_ptr");
+    }
+    // ((*ptr).x)
+    else if (auto *unary = dynamic_cast<UnaryExpr *>(memberAccess->object)) {
+      if (unary->op == TokenType::Star) {
+        if (auto *ptrVar = dynamic_cast<Variable *>(unary->operand)) {
+          LocalVar *localVar = this->findVariable(ptrVar->name);
+
+          structTypeName = this->getPointedToType(localVar->typeStr);
+          if (structTypeName.empty()) {
+            fprintf(
+                stderr,
+                "Error: Cannot dereference non-pointer in member access.\n");
+            std::abort();
+          }
+
+          auto it = this->structTypes.find(structTypeName);
+          if (it == this->structTypes.end()) {
+            fprintf(stderr,
+                    "Error: Unknown struct type '%s' in member access.\n",
+                    structTypeName.c_str());
+            std::abort();
+          }
+          structType = it->second;
+
+          structPtr = this->builder->CreateLoad(
+              localVar->alloca->getAllocatedType(), localVar->alloca,
+              ptrVar->name + "_load");
+
+          int fieldIndex =
+              this->getFieldIndex(structTypeName, memberAccess->field);
+          return this->builder->CreateStructGEP(
+              structType, structPtr, fieldIndex, memberAccess->field + "_ptr");
+        } else {
+          fprintf(stderr, "Error: Complex dereference in member access lvalue "
+                          "not yet supported.\n");
+          std::abort();
+        }
+      } else {
+        fprintf(
+            stderr,
+            "Error: Unsupported unary operation in member access lvalue.\n");
+        std::abort();
+      }
+    }
+
+    fprintf(stderr,
+            "Error: Complex member access as lvalue not yet supported.\n");
+    std::abort();
+  }
+
   fprintf(stderr, "Error: Expression is not an lvalue.\n");
   std::abort();
 }
@@ -802,6 +928,8 @@ llvm::Value *Codegen::genExprLValue(Expr *expr) {
     if (un->op == TokenType::Star) {
       return this->genExpr(un->operand);
     }
+  } else if (auto *memberAccess = dynamic_cast<MemberAccessExpr *>(expr)) {
+    return this->genLValue(memberAccess);
   }
   fprintf(stderr, "Error: Expression cannot be used as lvalue.\n");
   std::abort();
@@ -842,6 +970,16 @@ void Codegen::genForStatement(ForStmt *stmt) {
       fprintf(stderr, "Error: Invalid for loop condition.\n");
       std::abort();
     }
+
+    if (condVal->getType()->isIntegerTy(8)) {
+      condVal = this->builder->CreateICmpNE(
+          condVal, llvm::ConstantInt::get(condVal->getType(), 0), "tobool");
+    } else if (!condVal->getType()->isIntegerTy(1)) {
+      // If it's not i1 and not i8, convert any integer to i1
+      condVal = this->builder->CreateICmpNE(
+          condVal, llvm::ConstantInt::get(condVal->getType(), 0), "tobool");
+    }
+
     this->builder->CreateCondBr(condVal, bodyBB, afterBB);
   } else {
     this->builder->CreateBr(bodyBB);
@@ -901,4 +1039,204 @@ void Codegen::addVariable(const std::string &name, const LocalVar &var) {
   }
 
   this->scopeStack.back()[name] = var;
+}
+
+// MARK: Structs
+
+int Codegen::getFieldIndex(const std::string &structName,
+                           const std::string &fieldName) {
+  auto it = this->structFieldMetadata.find(structName);
+  if (it == this->structFieldMetadata.end()) {
+    fprintf(stderr, "Error: Unknown struct type '%s'.\n", structName.c_str());
+    std::abort();
+  }
+
+  const auto &fields = it->second;
+  for (size_t i = 0; i < fields.size(); ++i) {
+    if (fields[i].first == fieldName) {
+      return static_cast<int>(i);
+    }
+  }
+
+  fprintf(stderr, "Error: Struct '%s' has no field named '%s'.\n",
+          structName.c_str(), fieldName.c_str());
+  std::abort();
+}
+
+void Codegen::genStructDecl(StructDecl *structDecl) {
+  if (this->structTypes.find(structDecl->name) != this->structTypes.end()) {
+    fprintf(stderr, "Error: Struct '%s' is already defined.\n",
+            structDecl->name.c_str());
+    std::abort();
+  }
+
+  std::vector<llvm::Type *> fieldTypes;
+  for (const auto &field : structDecl->fields) {
+    llvm::Type *fieldType = this->getLLVMType(field.second, this->context);
+    if (!fieldType) {
+      fprintf(
+          stderr, "Error: Invalid type '%s' for field '%s' in struct '%s'.\n",
+          field.second.c_str(), field.first.c_str(), structDecl->name.c_str());
+      std::abort();
+    }
+    fieldTypes.push_back(fieldType);
+  }
+
+  llvm::StructType *structType =
+      llvm::StructType::create(this->context, fieldTypes, structDecl->name);
+
+  this->structTypes[structDecl->name] = structType;
+
+  this->structFieldMetadata[structDecl->name] = structDecl->fields;
+}
+
+llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
+  auto it = this->structTypes.find(expr->typeName);
+  if (it == this->structTypes.end()) {
+    fprintf(stderr, "Error: Unknown struct type '%s'.\n",
+            expr->typeName.c_str());
+    std::abort();
+  }
+
+  llvm::StructType *structType = it->second;
+
+  llvm::Function *func = this->builder->GetInsertBlock()->getParent();
+  if (!func) {
+    fprintf(stderr,
+            "Error: Cannot create struct literal outside a function.\n");
+    std::abort();
+  }
+
+  llvm::IRBuilder<>::InsertPoint oldIP = this->builder->saveIP();
+
+  llvm::BasicBlock *entry = &func->getEntryBlock();
+  this->builder->SetInsertPoint(entry, entry->begin());
+  llvm::AllocaInst *alloca =
+      this->builder->CreateAlloca(structType, nullptr, "structlit");
+
+  this->builder->restoreIP(oldIP);
+
+  auto metaIt = this->structFieldMetadata.find(expr->typeName);
+  if (metaIt == this->structFieldMetadata.end()) {
+    fprintf(stderr, "Error: No field metadata for struct '%s'.\n",
+            expr->typeName.c_str());
+    std::abort();
+  }
+
+  const auto &structFields = metaIt->second;
+
+  if (expr->fields.size() != structFields.size()) {
+    fprintf(stderr,
+            "Error: Struct '%s' requires %zu fields, but %zu were provided.\n",
+            expr->typeName.c_str(), structFields.size(), expr->fields.size());
+    std::abort();
+  }
+
+  for (const auto &fieldInit : expr->fields) {
+    const std::string &fieldName = fieldInit.first;
+    Expr *fieldValue = fieldInit.second;
+
+    int fieldIndex = this->getFieldIndex(expr->typeName, fieldName);
+
+    llvm::Value *value = this->genExpr(fieldValue);
+    if (!value) {
+      fprintf(stderr, "Error: Invalid initializer for field '%s'.\n",
+              fieldName.c_str());
+      std::abort();
+    }
+
+    llvm::Value *fieldPtr = this->builder->CreateStructGEP(
+        structType, alloca, fieldIndex, fieldName + "_ptr");
+
+    this->builder->CreateStore(value, fieldPtr);
+  }
+
+  return this->builder->CreateLoad(structType, alloca, "structval");
+}
+
+llvm::Value *Codegen::genMemberAccessExpr(MemberAccessExpr *expr) {
+  llvm::Value *structPtr = nullptr;
+  llvm::StructType *structType = nullptr;
+  std::string structTypeName;
+
+  if (auto *var = dynamic_cast<Variable *>(expr->object)) {
+    LocalVar *localVar = this->findVariable(var->name);
+
+    structTypeName = localVar->typeStr;
+
+    if (!structTypeName.empty() && structTypeName.back() == '*') {
+      // It's a pointer to struct, load it
+      structTypeName = structTypeName.substr(0, structTypeName.size() - 1);
+      structPtr =
+          this->builder->CreateLoad(localVar->alloca->getAllocatedType(),
+                                    localVar->alloca, var->name + "_load");
+    } else {
+      // It's a direct struct value, get its address
+      structPtr = localVar->alloca;
+    }
+
+    auto it = this->structTypes.find(structTypeName);
+    if (it == this->structTypes.end()) {
+      fprintf(stderr, "Error: Unknown struct type '%s' in member access.\n",
+              structTypeName.c_str());
+      std::abort();
+    }
+    structType = it->second;
+
+  } else if (auto *unary = dynamic_cast<UnaryExpr *>(expr->object)) {
+    // Handle (*ptr).x case
+    if (unary->op == TokenType::Star) {
+      if (auto *ptrVar = dynamic_cast<Variable *>(unary->operand)) {
+        LocalVar *localVar = this->findVariable(ptrVar->name);
+
+        structTypeName = this->getPointedToType(localVar->typeStr);
+        if (structTypeName.empty()) {
+          fprintf(stderr,
+                  "Error: Cannot dereference non-pointer in member access.\n");
+          std::abort();
+        }
+
+        auto it = this->structTypes.find(structTypeName);
+        if (it == this->structTypes.end()) {
+          fprintf(stderr, "Error: Unknown struct type '%s' in member access.\n",
+                  structTypeName.c_str());
+          std::abort();
+        }
+        structType = it->second;
+
+        structPtr =
+            this->builder->CreateLoad(localVar->alloca->getAllocatedType(),
+                                      localVar->alloca, ptrVar->name + "_load");
+      } else {
+        fprintf(
+            stderr,
+            "Error: Complex dereference in member access not yet supported.\n");
+        std::abort();
+      }
+    } else {
+      fprintf(stderr, "Error: Unsupported unary operation in member access.\n");
+      std::abort();
+    }
+  } else {
+    fprintf(stderr,
+            "Error: Complex expressions in member access not yet supported.\n");
+    std::abort();
+  }
+
+  int fieldIndex = this->getFieldIndex(structTypeName, expr->field);
+
+  auto metaIt = this->structFieldMetadata.find(structTypeName);
+  if (metaIt == this->structFieldMetadata.end()) {
+    fprintf(stderr, "Error: No field metadata for struct '%s'.\n",
+            structTypeName.c_str());
+    std::abort();
+  }
+
+  const std::string &fieldTypeStr = metaIt->second[fieldIndex].second;
+  llvm::Type *fieldType = this->getLLVMType(fieldTypeStr, this->context);
+
+  llvm::Value *fieldPtr = this->builder->CreateStructGEP(
+      structType, structPtr, fieldIndex, expr->field + "_ptr");
+
+  return this->builder->CreateLoad(fieldType, fieldPtr, expr->field);
 }

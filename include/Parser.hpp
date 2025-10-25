@@ -16,26 +16,20 @@ public:
   Expr *parseExpression(int precedence = 0);
 
   Statement *parseStatement(bool insideFunction = false);
-
   Statement *parseVarDecl(bool isConst);
-
   Statement *parseFunctionDecl();
-
   Statement *parseIfStatement();
-
   Statement *parseWhileStatement();
-
   Statement *parseForStatement();
-
   Statement *parseReturnStatement();
-
   Statement *parseBlockStatement();
+  Statement *parseStructDecl();
 
   Expr *parsePrimary();
 
   Expr *parseInitializer();
 
-  Expr* parseUnary();
+  Expr *parseUnary();
 
 private:
   int getPrecedence(TokenType type);

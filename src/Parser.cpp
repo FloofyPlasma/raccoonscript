@@ -17,6 +17,11 @@ Statement *Parser::parseStatement(bool insideFunction) {
   }
 
   if (!insideFunction && this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "struct") {
+    return this->parseStructDecl();
+  }
+
+  if (!insideFunction && this->current.type == TokenType::Keyword &&
       this->current.lexeme == "fun") {
     return this->parseFunctionDecl();
   }
@@ -198,6 +203,21 @@ Expr *Parser::parseExpression(int precedence) {
   }
 
   while (true) {
+    if (this->current.type == TokenType::Dot) {
+      this->advance(); // consume '.'
+
+      if (this->current.type != TokenType::Identifier) {
+        delete left;
+        return nullptr; // error
+      }
+
+      std::string fieldName = this->current.lexeme;
+      this->advance(); // consume field name
+
+      left = new MemberAccessExpr(left, fieldName);
+      continue;
+    }
+
     // Stop at semicolons, braces, parentheses, commas
     if (current.type == TokenType::Semicolon ||
         current.type == TokenType::RightParen ||
@@ -257,21 +277,81 @@ Expr *Parser::parsePrimary() {
       this->advance();
     }
 
+    if (this->current.type == TokenType::LeftBrace) {
+      this->advance(); // consume '{'
+
+      std::vector<std::pair<std::string, Expr *>> fieldInits;
+
+      while (this->current.type != TokenType::RightBrace &&
+             this->current.type != TokenType::EndOfFile) {
+        if (this->current.type != TokenType::Identifier) {
+          for (auto &pair : fieldInits) {
+            delete pair.second;
+          }
+          return nullptr;
+        }
+
+        std::string fieldName = this->current.lexeme;
+        this->advance(); // consume field name
+
+        if (this->current.type != TokenType::Colon) {
+          for (auto &pair : fieldInits) {
+            delete pair.second;
+          }
+          return nullptr;
+        }
+        this->advance(); // consume ':'
+
+        Expr *fieldValue = this->parseExpression();
+        if (!fieldValue) {
+          for (auto &pair : fieldInits) {
+            delete pair.second;
+          }
+          return nullptr;
+        }
+
+        fieldInits.push_back({fieldName, fieldValue});
+
+        if (this->current.type == TokenType::Comma) {
+          this->advance(); // consume ','
+
+        } else if (this->current.type != TokenType::RightBrace) {
+          for (auto &pair : fieldInits) {
+            delete pair.second;
+          }
+          return nullptr;
+        }
+      }
+
+      if (this->current.type != TokenType::RightBrace) {
+        for (auto &pair : fieldInits) {
+          delete pair.second;
+        }
+        return nullptr;
+      }
+      this->advance(); // consume '}'
+
+      return new StructLiteral(name, fieldInits);
+    }
+
     if (this->current.type == TokenType::LeftParen) {
       this->advance();
       std::vector<Expr *> args;
       while (this->current.type != TokenType::RightParen &&
              this->current.type != TokenType::EndOfFile) {
         Expr *arg = this->parseExpression();
-        if (!arg)
+        if (!arg) {
           return nullptr;
+        }
         args.push_back(arg);
-        if (this->current.type == TokenType::Comma)
+        if (this->current.type == TokenType::Comma) {
           this->advance();
+        }
       }
       if (this->current.type != TokenType::RightParen) {
-        for (auto a : args)
+        for (auto a : args) {
           delete a;
+        }
         return nullptr;
       }
       this->advance();
@@ -660,4 +740,63 @@ Expr *Parser::parseUnary() {
   }
 
   return this->parsePrimary();
+}
+
+Statement *Parser::parseStructDecl() {
+  this->advance(); // consume 'struct'
+
+  if (this->current.type != TokenType::Identifier) {
+    return nullptr; // error
+  }
+
+  std::string name = this->current.lexeme;
+  this->advance(); // consume struct name
+
+  if (this->current.type != TokenType::LeftBrace) {
+    return nullptr; // error
+  }
+  this->advance(); // consume '{'
+
+  std::vector<std::pair<std::string, std::string>> fields;
+
+  while (this->current.type != TokenType::RightBrace &&
+         this->current.type != TokenType::EndOfFile) {
+    if (this->current.type != TokenType::Identifier) {
+      return nullptr; // error
+    }
+
+    std::string fieldName = this->current.lexeme;
+    this->advance(); // consume field name
+
+    if (this->current.type != TokenType::Colon) {
+      return nullptr;
+    }
+    this->advance(); // consume ':'
+
+    if (this->current.type != TokenType::Identifier) {
+      return nullptr; // error
+    }
+
+    std::string fieldType = this->current.lexeme;
+    this->advance(); // consume field type
+
+    while (this->current.type == TokenType::Star) {
+      fieldType += "*";
+      this->advance();
+    }
+
+    fields.push_back({fieldName, fieldType});
+
+    if (this->current.type != TokenType::Semicolon) {
+      return nullptr;
+    }
+    this->advance();
+  }
+
+  if (this->current.type != TokenType::RightBrace) {
+    return nullptr;
+  }
+  this->advance(); // consume '}'
+
+  return new StructDecl(name, fields);
 }

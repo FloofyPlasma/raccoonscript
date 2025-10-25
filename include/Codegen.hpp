@@ -33,6 +33,10 @@ private:
   std::unique_ptr<llvm::Module> module;
   std::unique_ptr<llvm::IRBuilder<>> builder;
   std::vector<std::unordered_map<std::string, LocalVar>> scopeStack;
+  std::unordered_map<std::string, llvm::StructType *> structTypes;
+  std::unordered_map<std::string,
+                     std::vector<std::pair<std::string, std::string>>>
+      structFieldMetadata;
 
   static std::string getPointedToType(const std::string &ptrType) {
     if (ptrType.empty() || ptrType.back() != '*') {
@@ -41,8 +45,7 @@ private:
     return ptrType.substr(0, ptrType.size() - 1);
   }
 
-  static llvm::Type *getLLVMType(const std::string &type,
-                                 llvm::LLVMContext &ctx);
+  llvm::Type *getLLVMType(const std::string &type, llvm::LLVMContext &ctx);
 
   /// helper: cast integer values between widths (signed extend / trunc)
   static llvm::Value *castIntegerIfNeeded(llvm::IRBuilder<> *builder,
@@ -84,6 +87,10 @@ private:
                     std::unordered_map<std::string, LocalVar> &locals,
                     const std::string &name);
 
+  /// helper: Get field index by name for a struct type
+  int getFieldIndex(const std::string &structName,
+                    const std::string &fieldName);
+
   // Scope management
   void pushScope();
   void popScope();
@@ -108,4 +115,9 @@ private:
   void genWhileStatement(WhileStmt *stmt);
   void genForStatement(ForStmt *stmt);
   void genBlockStatement(BlockStmt *stmt);
+
+  // Structs
+  void genStructDecl(StructDecl *structDecl);
+  llvm::Value *genStructLiteral(StructLiteral *expr);
+  llvm::Value *genMemberAccessExpr(MemberAccessExpr *expr);
 };

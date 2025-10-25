@@ -78,6 +78,6 @@ private:
   // Control flow
   void genIfStatement(IfStmt *stmt);
   void genWhileStatement(WhileStmt *stmt);
-  // void genForStatement(ForStmt* stmt);
+  void genForStatement(ForStmt* stmt);
   void genBlockStatement(BlockStmt *stmt);
 };

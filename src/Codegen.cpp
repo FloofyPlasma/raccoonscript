@@ -241,6 +241,9 @@ void Codegen::genStatement(Statement *stmt) {
   } else if (auto *whileStmt = dynamic_cast<WhileStmt *>(stmt)) {
     this->genWhileStatement(whileStmt);
     return;
+  } else if (auto *forStmt = dynamic_cast<ForStmt *>(stmt)) {
+    this->genForStatement(forStmt);
+    return;
   } else if (auto *blockStmt = dynamic_cast<BlockStmt *>(stmt)) {
     this->genBlockStatement(blockStmt);
     return;
@@ -669,6 +672,55 @@ void Codegen::genBlockStatement(BlockStmt *stmt) {
   for (auto *s : stmt->statements) {
     this->genStatement(s);
   }
+  this->popScope();
+}
+
+void Codegen::genForStatement(ForStmt *stmt) {
+  this->pushScope();
+
+  if (stmt->initializer) {
+    this->genStatement(stmt->initializer);
+  }
+
+  llvm::Function *func = this->builder->GetInsertBlock()->getParent();
+
+  llvm::BasicBlock *condBB =
+      llvm::BasicBlock::Create(this->context, "forcond", func);
+  llvm::BasicBlock *bodyBB =
+      llvm::BasicBlock::Create(this->context, "forbody", func);
+  llvm::BasicBlock *incBB =
+      llvm::BasicBlock::Create(this->context, "forinc", func);
+  llvm::BasicBlock *afterBB =
+      llvm::BasicBlock::Create(this->context, "afterfor", func);
+
+  this->builder->CreateBr(condBB);
+
+  this->builder->SetInsertPoint(condBB);
+  if (stmt->condition) {
+    llvm::Value *condVal = this->genExpr(stmt->condition);
+    if (!condVal) {
+      fprintf(stderr, "Error: Invalid for loop condition.\n");
+      std::abort();
+    }
+    this->builder->CreateCondBr(condVal, bodyBB, afterBB);
+  } else {
+    this->builder->CreateBr(bodyBB);
+  }
+
+  this->builder->SetInsertPoint(bodyBB);
+  for (auto *s : stmt->body) {
+    this->genStatement(s);
+  }
+  this->builder->CreateBr(incBB);
+
+  this->builder->SetInsertPoint(incBB);
+  if (stmt->increment) {
+    this->genExpr(stmt->increment);
+  }
+  this->builder->CreateBr(condBB);
+
+  this->builder->SetInsertPoint(afterBB);
+
   this->popScope();
 }
 

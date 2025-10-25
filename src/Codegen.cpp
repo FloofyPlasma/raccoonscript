@@ -593,6 +593,13 @@ void Codegen::genWhileStatement(WhileStmt *stmt) {
     fprintf(stderr, "Error: Invalid while condition.\n");
     std::abort();
   }
+
+  if (condVal->getType()->isIntegerTy() &&
+      !condVal->getType()->isIntegerTy(1)) {
+    condVal = this->builder->CreateICmpNE(
+        condVal, llvm::ConstantInt::get(condVal->getType(), 0), "tobool");
+  }
+
   this->builder->CreateCondBr(condVal, loopBB, afterBB);
 
   // Loop body

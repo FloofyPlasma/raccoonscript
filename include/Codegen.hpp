@@ -49,12 +49,40 @@ private:
                                           llvm::Value *val, llvm::Type *fromTy,
                                           llvm::Type *toTy);
 
+  /// helper: check if a type string represents an unsigned type
+  static bool isUnsignedType(const std::string &typeStr) {
+    return !typeStr.empty() && typeStr[0] == 'u';
+  }
+
+  std::string getExprTypeStr(Expr *expr) {
+    if (auto *var = dynamic_cast<Variable *>(expr)) {
+      LocalVar *localVar = this->findVariable(var->name);
+      return localVar->typeStr;
+    }
+
+    if (dynamic_cast<IntLiteral *>(expr)) {
+      return "i32";
+    }
+    if (dynamic_cast<FloatLiteral *>(expr)) {
+      return "f32";
+    }
+    if (dynamic_cast<BoolLiteral *>(expr)) {
+      return "bool";
+    }
+    if (dynamic_cast<CharLiteral *>(expr)) {
+      return "char";
+    }
+    // For more complex expressions, we can't easily determine type without full
+    // type inference Default to signed for now...
+    return "i32";
+  }
+
   /// find l-value storage for a variable name (local alloca or global variable)
   [[deprecated("Use Codegen::findVariable(name) instead.")]]
   static llvm::Value *
   findLValueStorage(llvm::Module *module,
                     std::unordered_map<std::string, LocalVar> &locals,
-                    const std::string &name) ;
+                    const std::string &name);
 
   // Scope management
   void pushScope();
@@ -78,6 +106,6 @@ private:
   // Control flow
   void genIfStatement(IfStmt *stmt);
   void genWhileStatement(WhileStmt *stmt);
-  void genForStatement(ForStmt* stmt);
+  void genForStatement(ForStmt *stmt);
   void genBlockStatement(BlockStmt *stmt);
 };

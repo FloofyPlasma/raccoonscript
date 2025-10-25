@@ -223,7 +223,7 @@ Expr *Parser::parseExpression(int precedence) {
 
 Expr *Parser::parsePrimary() {
   if (this->current.type == TokenType::IntLiteral) {
-    int value = std::stoi(this->current.lexeme);
+    int value = std::stoll(this->current.lexeme);
     this->advance(); // consume integer literal
     return new IntLiteral(value);
   }
@@ -231,6 +231,12 @@ Expr *Parser::parsePrimary() {
     float value = std::stof(this->current.lexeme);
     this->advance(); // consume float literal
     return new FloatLiteral(value);
+  }
+  if (this->current.type == TokenType::Keyword &&
+      (this->current.lexeme == "true" || this->current.lexeme == "false")) {
+    bool value = (this->current.lexeme == "true");
+    this->advance(); // consume boolean literal
+    return new BoolLiteral(value);
   }
   if (this->current.type == TokenType::CharLiteral) {
     char value = this->current.lexeme[0];
@@ -328,6 +334,7 @@ int Parser::getPrecedence(TokenType type) {
   switch (type) {
   case TokenType::Star:
   case TokenType::Slash:
+  case TokenType::Percent:
     return 30;
   case TokenType::Plus:
   case TokenType::Minus:
@@ -337,8 +344,15 @@ int Parser::getPrecedence(TokenType type) {
   case TokenType::GreaterThan:
   case TokenType::GreaterEqual:
     return 10;
-  case TokenType::Equal:
+  case TokenType::DoubleEqual:
+  case TokenType::BangEqual:
+    return 9;
+  case TokenType::AndAnd:
+    return 6;
+  case TokenType::OrOr:
     return 5;
+  case TokenType::Equal:
+    return 2;
   default:
     return -1;
   }
@@ -631,7 +645,9 @@ Statement *Parser::parseBlockStatement() {
 }
 
 Expr *Parser::parseUnary() {
-  if (this->current.type == TokenType::Ampersand ||
+  if (this->current.type == TokenType::Minus ||
+      this->current.type == TokenType::Bang ||
+      this->current.type == TokenType::Ampersand ||
       this->current.type == TokenType::Star) {
     TokenType op = this->current.type;
     this->advance(); // consume unary operator

@@ -28,7 +28,7 @@ bool emitObjectFile(llvm::Module *module, const std::string &filename) {
   llvm::InitializeAllAsmParsers();
   llvm::InitializeAllAsmPrinters();
 
-  std::string targetTriple = llvm::sys::getDefaultTargetTriple();
+  llvm::Triple targetTriple = llvm::Triple(llvm::sys::getDefaultTargetTriple());
   module->setTargetTriple(targetTriple);
 
   std::string error;

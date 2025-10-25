@@ -4,7 +4,6 @@
 #include <unordered_set>
 
 Token Lexer::nextToken() {
-  this->skipWhitespace();
   this->skipComment();
 
   if (pos >= this->source.size()) {
@@ -131,38 +130,58 @@ Token Lexer::nextToken() {
   }
 }
 
-void Lexer::skipWhitespace() {
-  while (this->pos < this->source.size() &&
-         std::isspace(this->source[this->pos])) {
-    if (this->source[pos] == '\n') {
-      this->line++;
-      this->column = 1;
-    } else {
-      this->column++;
-    }
-
-    this->pos++;
-  }
-}
-
 void Lexer::skipComment() {
-  if (this->source[pos] == '/' && pos + 1 < this->source.size()) {
-    if (this->source[pos + 1] == '/') {
-      pos += 2;
-      while (pos < this->source.size() && this->source[pos] != '\n') {
-        pos++;
+  while (pos < this->source.size()) {
+    while (pos < this->source.size() && std::isspace(this->source[pos])) {
+      if (this->source[pos] == '\n') {
+        this->line++;
+        this->column = 1;
+      } else {
+        this->column++;
       }
-    } else if (this->source[pos + 1] == '*') {
-      pos += 2;
-      while (pos + 1 < this->source.size() &&
-             !(this->source[pos] == '*' && this->source[pos + 1] == '/')) {
-        if (this->source[pos] == '\n') {
-          line++;
-        }
-        pos++;
-      }
-      pos += 2; // skip closing */
+      pos++;
     }
+
+    if (pos < this->source.size() && this->source[pos] == '/' &&
+        pos + 1 < this->source.size()) {
+
+      // Single-line comment //
+      if (this->source[pos + 1] == '/') {
+        pos += 2;
+        column += 2;
+        while (pos < this->source.size() && this->source[pos] != '\n') {
+          pos++;
+          column++;
+        }
+
+        continue;
+      }
+
+      // Multi-line comment /* */
+      else if (this->source[pos + 1] == '*') {
+        pos += 2;
+        column += 2;
+        while (pos + 1 < this->source.size() &&
+               !(this->source[pos] == '*' && this->source[pos + 1] == '/')) {
+          if (this->source[pos] == '\n') {
+            line++;
+            column = 1;
+          } else {
+            column++;
+          }
+          pos++;
+        }
+        if (pos + 1 < this->source.size()) {
+          pos += 2; // skip closing */
+          column += 2;
+        }
+
+        continue;
+      }
+    }
+
+    // No more comments or whitespace to skip
+    break;
   }
 }
 

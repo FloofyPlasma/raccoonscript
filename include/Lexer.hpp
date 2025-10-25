@@ -14,6 +14,7 @@ public:
   Token nextToken();
 
 private:
+  [[deprecated("Whitespace skipping is handled in Lexer::skipComment().")]]
   void skipWhitespace();
   void skipComment();
 

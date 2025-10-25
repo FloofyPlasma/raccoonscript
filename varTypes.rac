@@ -1,0 +1,65 @@
+fun test_float(): f32 {
+    let x: f32 = 3.14;
+    let y: f32 = 2.0;
+    let result: f32 = x * y + 1.5;
+    return result;
+}
+
+fun test_bool(): bool {
+    let a: bool = true;
+    let b: bool = false;
+    let c: bool = a && b;
+    let d: bool = a || b;
+    let e: bool = !c;
+    return e;
+}
+
+fun test_comparison(): bool {
+    let x: f32 = 5.5;
+    let y: f32 = 3.2;
+    return x > y;
+}
+
+fun test_float_comparison(): bool {
+    let a: f32 = 10.5;
+    let b: f32 = 10.5;
+    return a == b;
+}
+
+fun test_negation(): i32 {
+    let x: i32 = 10;
+    let y: i32 = -x;
+    return y;
+}
+
+fun test_float_negation(): f32 {
+    let x: f32 = 5.5;
+    let y: f32 = -x;
+    return y;
+}
+
+fun test_logical_not(): bool {
+    let a: bool = true;
+    let b: bool = !a;
+    return b;
+}
+
+fun test_complex_bool(): bool {
+    let a: bool = true;
+    let b: bool = false;
+    let c: bool = true;
+    return (a && b) || (c && !b);
+}
+
+fun main(): i32 {
+    let f: f32 = test_float();
+    let b: bool = test_bool();
+    let c: bool = test_comparison();
+    let fc: bool = test_float_comparison();
+    let n: i32 = test_negation();
+    let fn: f32 = test_float_negation();
+    let ln: bool = test_logical_not();
+    let cb: bool = test_complex_bool();
+    
+    return 0;
+}

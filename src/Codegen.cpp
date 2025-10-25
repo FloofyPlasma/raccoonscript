@@ -81,6 +81,17 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
     return llvm::Type::getInt128Ty(ctx);
   }
 
+  if (type == "f32") {
+    return llvm::Type::getFloatTy(ctx);
+  }
+  if (type == "f64") {
+    return llvm::Type::getDoubleTy(ctx);
+  }
+
+  if (type == "bool") {
+    return llvm::Type::getInt8Ty(ctx);
+  }
+
   if (type == "void") {
     return llvm::Type::getVoidTy(ctx);
   }
@@ -116,6 +127,12 @@ std::unique_ptr<Module> Codegen::takeModule() { return std::move(module); }
 llvm::Value *Codegen::genExpr(Expr *expr) {
   if (auto *intLit = dynamic_cast<IntLiteral *>(expr)) {
     return llvm::ConstantInt::get(getLLVMType("i32", context), intLit->value);
+  } else if (auto *floatLit = dynamic_cast<FloatLiteral *>(expr)) {
+    return llvm::ConstantFP::get(this->getLLVMType("f32", this->context),
+                                 floatLit->value);
+  } else if (auto *boolLit = dynamic_cast<BoolLiteral *>(expr)) {
+    return llvm::ConstantInt::get(this->getLLVMType("bool", this->context),
+                                  boolLit->value);
   } else if (auto *var = dynamic_cast<Variable *>(expr)) {
     LocalVar *localVar = this->findVariable(var->name);
 
@@ -333,39 +350,116 @@ llvm::Value *Codegen::genBinaryExpr(BinaryExpr *expr) {
     std::abort();
   }
 
+  bool isFloat = lhs->getType()->isFloatingPointTy();
+
   switch (expr->op) {
   case TokenType::Plus: {
+    if (isFloat) {
+      return this->builder->CreateFAdd(lhs, rhs, "faddtmp");
+    }
     return this->builder->CreateAdd(lhs, rhs, "addtmp");
   }
   case TokenType::Minus: {
+    if (isFloat) {
+      return this->builder->CreateFSub(lhs, rhs, "fsubtmp");
+    }
     return this->builder->CreateSub(lhs, rhs, "subtmp");
   }
   case TokenType::Star: {
+    if (isFloat) {
+      return this->builder->CreateFMul(lhs, rhs, "fmultmp");
+    }
     return this->builder->CreateMul(lhs, rhs, "multmp");
   }
   case TokenType::Slash: {
+    if (isFloat) {
+      return this->builder->CreateFDiv(lhs, rhs, "fdivtmp");
+    }
     return this->builder->CreateSDiv(lhs, rhs, "divtmp");
   }
   case TokenType::Percent: {
-    return this->builder->CreateSRem(lhs, rhs, "modtmp");
+    if (isFloat) {
+      return this->builder->CreateFRem(lhs, rhs, "fremtmp");
+    }
+    return this->builder->CreateSRem(lhs, rhs, "remtmp");
   }
   case TokenType::DoubleEqual: {
-    return this->builder->CreateICmpEQ(lhs, rhs, "eqtmp");
+    llvm::Value *cmp;
+    if (isFloat) {
+      cmp = this->builder->CreateFCmpOEQ(lhs, rhs, "feqtmp");
+    } else {
+      cmp = this->builder->CreateICmpEQ(lhs, rhs, "eqtmp");
+    }
+    return this->builder->CreateZExt(cmp, llvm::Type::getInt8Ty(context),
+                                     "eqresult");
   }
   case TokenType::BangEqual: {
-    return this->builder->CreateICmpNE(lhs, rhs, "netmp");
+    llvm::Value *cmp;
+    if (isFloat) {
+      cmp = this->builder->CreateFCmpONE(lhs, rhs, "fnetmp");
+    } else {
+      cmp = this->builder->CreateICmpNE(lhs, rhs, "netmp");
+    }
+    return this->builder->CreateZExt(cmp, llvm::Type::getInt8Ty(context),
+                                     "neresult");
   }
   case TokenType::LessThan: {
-    return this->builder->CreateICmpSLT(lhs, rhs, "lttmp");
+    llvm::Value *cmp;
+    if (isFloat) {
+      cmp = this->builder->CreateFCmpOLT(lhs, rhs, "flttmp");
+    } else {
+      cmp = this->builder->CreateICmpSLT(lhs, rhs, "lttmp");
+    }
+    return this->builder->CreateZExt(cmp, llvm::Type::getInt8Ty(context),
+                                     "ltresult");
   }
   case TokenType::LessEqual: {
-    return this->builder->CreateICmpSLE(lhs, rhs, "letmp");
+    llvm::Value *cmp;
+    if (isFloat) {
+      cmp = this->builder->CreateFCmpOLE(lhs, rhs, "fletmp");
+    } else {
+      cmp = this->builder->CreateICmpSLE(lhs, rhs, "letmp");
+    }
+    return this->builder->CreateZExt(cmp, llvm::Type::getInt8Ty(context),
+                                     "leresult");
   }
   case TokenType::GreaterThan: {
-    return this->builder->CreateICmpSGT(lhs, rhs, "gttmp");
+    llvm::Value *cmp;
+    if (isFloat) {
+      cmp = this->builder->CreateFCmpOGT(lhs, rhs, "fgttmp");
+    } else {
+      cmp = this->builder->CreateICmpSGT(lhs, rhs, "gttmp");
+    }
+    return this->builder->CreateZExt(cmp, llvm::Type::getInt8Ty(context),
+                                     "gtresult");
   }
   case TokenType::GreaterEqual: {
-    return this->builder->CreateICmpSGE(lhs, rhs, "getmp");
+    llvm::Value *cmp;
+    if (isFloat) {
+      cmp = this->builder->CreateFCmpOGE(lhs, rhs, "fgetmp");
+    } else {
+      cmp = this->builder->CreateICmpSGE(lhs, rhs, "getmp");
+    }
+    return this->builder->CreateZExt(cmp, llvm::Type::getInt8Ty(context),
+                                     "geresult");
+  }
+  case TokenType::AndAnd: {
+    llvm::Value *lhsBool = this->builder->CreateICmpNE(
+        lhs, llvm::ConstantInt::get(lhs->getType(), 0), "lhsbool");
+    llvm::Value *rhsBool = this->builder->CreateICmpNE(
+        rhs, llvm::ConstantInt::get(rhs->getType(), 0), "rhsbool");
+    llvm::Value *result = this->builder->CreateAnd(lhsBool, rhsBool, "andtmp");
+    return this->builder->CreateZExt(result, llvm::Type::getInt8Ty(context),
+                                     "andresult");
+  }
+  case TokenType::OrOr: {
+    llvm::Value *lhsBool = this->builder->CreateICmpNE(
+        lhs, llvm::ConstantInt::get(lhs->getType(), 0), "lhsbool");
+    llvm::Value *rhsBool = this->builder->CreateICmpNE(
+        rhs, llvm::ConstantInt::get(rhs->getType(), 0), "rhsbool");
+    llvm::Value *result = this->builder->CreateOr(lhsBool, rhsBool, "ortmp");
+    return this->builder->CreateZExt(result, llvm::Type::getInt8Ty(context),
+                                     "orresult");
   }
   default: {
     fprintf(stderr, "Error: Unknown binary operator.\n");
@@ -597,6 +691,30 @@ llvm::Value *Codegen::genUnaryExpr(UnaryExpr *expr) {
               "Error: Dereference of complex expressions not yet supported.\n");
       std::abort();
     }
+  }
+  case TokenType::Bang: { // !bool
+    llvm::Value *operand = this->genExpr(expr->operand);
+    if (!operand) {
+      fprintf(stderr, "Error: Invalid operand for logical NOT.\n");
+      std::abort();
+    }
+
+    llvm::Value *boolVal = this->builder->CreateICmpNE(
+        operand, llvm::ConstantInt::get(operand->getType(), 0), "tobool");
+    llvm::Value *notVal = this->builder->CreateNot(boolVal, "nottmp");
+    return this->builder->CreateZExt(notVal, llvm::Type::getInt8Ty(context),
+                                     "notresult");
+  }
+  case TokenType::Minus: {
+    llvm::Value *operand = this->genExpr(expr->operand);
+    if (!operand) {
+      fprintf(stderr, "Error: Invalid operand for negation.\n");
+      std::abort();
+    }
+    if (operand->getType()->isFloatingPointTy()) {
+      return this->builder->CreateFNeg(operand, "fnegtmp");
+    }
+    return this->builder->CreateNeg(operand, "negtmp");
   }
   default: {
     llvm::Value *operand = this->genExpr(expr->operand);

@@ -20,6 +20,11 @@ struct FloatLiteral : Expr {
   FloatLiteral(float v) : value(v) {}
 };
 
+struct BoolLiteral : Expr {
+  bool value;
+  BoolLiteral(bool v) : value(v) {}
+};
+
 struct StrLiteral : Expr {
   std::string value;
   StrLiteral(std::string v) : value(v) {}

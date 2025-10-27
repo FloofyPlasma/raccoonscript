@@ -228,7 +228,11 @@ jobs:
           
           TOTAL=$((TOTAL + 1))
           test_name=$(basename "$test_file" .rac)
-          expected_code=$(head -n 5 "$test_file" | grep -oP '//\s*EXPECT:\s*\K\d+' || echo "0")
+          
+          expected_code=$(head -n 5 "$test_file" | grep -E '//\s*EXPECT:\s*[0-9]+' | sed -E 's/.*EXPECT:[[:space:]]*([0-9]+).*/\1/' | head -n 1)
+          if [ -z "$expected_code" ]; then
+            expected_code="0"
+          fi
           
           echo ""
           echo "[$TOTAL] Testing: $test_name (expecting exit code: $expected_code)"

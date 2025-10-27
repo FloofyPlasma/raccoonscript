@@ -52,14 +52,10 @@ jobs:
 
     - name: Cache LLVM (Linux)
       if: runner.os == 'Linux'
-      id: cache-llvm-linux
-      uses: actions/cache@v4
+      uses: awalsh128/cache-apt-pkgs-action@latest
       with:
-        path: |
-          ~/.cache/apt/archives
-        key: llvm-${{ env.LLVM_VERSION }}-linux-${{ runner.arch }}
-        restore-keys: |
-          llvm-21-linux-${{ runner.arch }}
+        packages: llvm-21-dev libclang-21-dev
+        version: ${{ env.LLVM_VERSION }}
 
     - name: Cache Homebrew (macOS)
       if: runner.os == 'macOS'
@@ -75,7 +71,7 @@ jobs:
           llvm-21-macos-${{ runner.arch }}
 
     - name: Install LLVM (Linux)
-      if: runner.os == 'Linux' && steps.cache-llvm-linux.outputs.cache-hit != 'true'
+      if: runner.os == 'Linux'
       run: |
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
@@ -361,8 +357,10 @@ jobs:
           exit 1
         } elseif ($total -eq 0) {
           Write-Host "⚠️  No tests were run"
+          exit 0
         } else {
           Write-Host "✅ All tests passed!"
+          exit 0
         }
 
     - name: Compiler Version Info

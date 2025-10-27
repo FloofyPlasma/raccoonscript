@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(RaccoonCompiler LANGUAGES C CXX)
-find_package(LLVM REQUIRED CONFIG)
+find_package(LLVM 21.1.4 REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
@@ -40,5 +40,10 @@ execute_process(
 string(REPLACE " " ";" LLVM_LIBS "${LLVM_LIBS}")
 string(REPLACE " " ";" LLVM_CXXFLAGS "${LLVM_CXXFLAGS}")
 
+if(WIN32)
+    string(REPLACE "/GR-" "" LLVM_CXXFLAGS "${LLVM_CXXFLAGS}")
+    set(WINDOWS_LIBRARIES ntdll)
+endif()
+
 target_compile_options(raccoonc PRIVATE ${LLVM_CXXFLAGS})
-target_link_libraries(raccoonc ${LLVM_LIBS})
+target_link_libraries(raccoonc ${LLVM_LIBS} ${WINDOWS_LIBRARIES})

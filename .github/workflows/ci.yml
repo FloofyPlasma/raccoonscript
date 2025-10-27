@@ -376,21 +376,23 @@ jobs:
     - name: Prepare Artifact (Linux/macOS)
       if: runner.os != 'Windows'
       run: |
-        mkdir artifact
-        cp ${{ matrix.executable_path }} artifact/
-        chmod +x artifact/${{ matrix.executable_name }}
+        mkdir release
+        cp ${{ matrix.executable_path }} release/
+        chmod +x release/${{ matrix.executable_name }}
+        zip -r release/${{ matrix.artifact_name }}.zip release/
 
     - name: Prepare Artifact (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        New-Item -ItemType Directory -Path artifact
-        Copy-Item ${{ matrix.executable_path }} artifact/
+        New-Item -ItemType Directory -Force -Path release
+        Copy-Item ${{ matrix.executable_path }} release/
+        Compress-Archive -Path release/* -DestinationPath release/${{ matrix.artifact_name }}.zip
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.artifact_name }}
+        name: ${{ matrix.artifact_name }}.zip
         path: artifact/${{ matrix.executable_name }}
         if-no-files-found: error
         retention-days: 30

@@ -8,7 +8,7 @@ pretend i have a logo here k thanks bye
 A programming language I guess. It uses [LLVM](https://github.com/llvm/llvm-project) on the backend.
 
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/) ![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/floofyplasma/raccoonscript)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/) ![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/floofyplasma/raccoonscript) ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/floofyplasma/raccoonscript/ci.yml)
 
 </div>
 

@@ -275,8 +275,10 @@ jobs:
           exit 1
         elif [ $TOTAL -eq 0 ]; then
           echo "⚠️  No tests were run"
+          exit 0
         else
           echo "✅ All tests passed!"
+          exit 0
         fi
 
     - name: Run Compiler Tests (Windows)

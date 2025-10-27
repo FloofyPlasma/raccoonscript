@@ -40,5 +40,10 @@ execute_process(
 string(REPLACE " " ";" LLVM_LIBS "${LLVM_LIBS}")
 string(REPLACE " " ";" LLVM_CXXFLAGS "${LLVM_CXXFLAGS}")
 
+if(WIN32)
+    string(REPLACE "/GR-" "" LLVM_CXXFLAGS "${LLVM_CXXFLAGS}")
+    set(WINDOWS_LIBRARIES ntdll)
+endif()
+
 target_compile_options(raccoonc PRIVATE ${LLVM_CXXFLAGS})
-target_link_libraries(raccoonc ${LLVM_LIBS})
+target_link_libraries(raccoonc ${LLVM_LIBS} ${WINDOWS_LIBRARIES})

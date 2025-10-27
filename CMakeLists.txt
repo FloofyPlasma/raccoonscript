@@ -5,7 +5,21 @@ find_package(LLVM 21.1 REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
-message(STATUS "LLVM libraries: ${LLVM_LIBS}")
+message(STATUS "LLVM definitions: ${LLVM_DEFINITIONS}")
+
+# HUGE HACK: Remove diaguids from link libraries to avoid stupid errors.
+# TODO: Find a better solution. This is disgusting, but it works for now.
+if(WIN32)
+    foreach(target ${LLVM_AVAILABLE_LIBS})
+        if(TARGET ${target})
+            get_target_property(link_libs ${target} INTERFACE_LINK_LIBRARIES)
+            if(link_libs)
+                list(FILTER link_libs EXCLUDE REGEX "diaguids")
+                set_target_properties(${target} PROPERTIES INTERFACE_LINK_LIBRARIES "${link_libs}")
+            endif()
+        endif()
+    endforeach()
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,7 +27,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${CMAKE_SOURCE_DIR}/include)
-add_definitions(${LLVM_DEFINITIONS})
+
+separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+add_definitions(${LLVM_DEFINITIONS_LIST})
 
 set(SOURCES
     src/main.cpp
@@ -26,24 +42,22 @@ set(SOURCES
 
 add_executable(raccoonc ${SOURCES})
 
-# Use llvm-config to get correct link flags
-execute_process(
-    COMMAND llvm-config --libs
-    OUTPUT_VARIABLE LLVM_LIBS
-    OUTPUT_STRIP_TRAILING_WHITESPACE
+llvm_map_components_to_libnames(llvm_libs
+    core
+    support
+    irreader
+    target
+    ${LLVM_TARGETS_TO_BUILD}
 )
-execute_process(
-    COMMAND llvm-config --cxxflags
-    OUTPUT_VARIABLE LLVM_CXXFLAGS
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-string(REPLACE " " ";" LLVM_LIBS "${LLVM_LIBS}")
-string(REPLACE " " ";" LLVM_CXXFLAGS "${LLVM_CXXFLAGS}")
 
 if(WIN32)
-    string(REPLACE "/GR-" "" LLVM_CXXFLAGS "${LLVM_CXXFLAGS}")
-    set(WINDOWS_LIBRARIES ntdll)
+    list(FILTER llvm_libs EXCLUDE REGEX "diaguids")
 endif()
 
-target_compile_options(raccoonc PRIVATE ${LLVM_CXXFLAGS})
-target_link_libraries(raccoonc ${LLVM_LIBS} ${WINDOWS_LIBRARIES})
+message(STATUS "LLVM libraries: ${llvm_libs}")
+
+target_link_libraries(raccoonc ${llvm_libs})
+
+if(WIN32)
+    target_link_libraries(raccoonc ntdll)
+endif()

@@ -1,0 +1,411 @@
+name: Build RaccoonCompiler
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  LLVM_VERSION: "21.1.4"
+  CMAKE_VERSION: "3.20"
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: raccoonc-linux
+            executable_name: raccoonc
+            executable_path: build/raccoonc
+          - os: macos-latest
+            artifact_name: raccoonc-macos
+            executable_name: raccoonc
+            executable_path: build/raccoonc
+          - os: windows-latest
+            artifact_name: raccoonc-windows
+            executable_name: raccoonc.exe
+            executable_path: build/Release/raccoonc.exe
+            llvm_archive: clang+llvm-21.1.4-x86_64-pc-windows-msvc.tar.xz
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Cache LLVM (Windows)
+      if: runner.os == 'Windows'
+      id: cache-llvm-windows
+      uses: actions/cache@v4
+      with:
+        path: |
+          llvm-windows
+          llvm.tar.xz
+        key: llvm-${{ env.LLVM_VERSION }}-windows-${{ runner.arch }}
+        restore-keys: |
+          llvm-21-windows-${{ runner.arch }}
+
+    - name: Cache LLVM (Linux)
+      if: runner.os == 'Linux'
+      id: cache-llvm-linux
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/apt/archives
+        key: llvm-${{ env.LLVM_VERSION }}-linux-${{ runner.arch }}
+        restore-keys: |
+          llvm-21-linux-${{ runner.arch }}
+
+    - name: Cache Homebrew (macOS)
+      if: runner.os == 'macOS'
+      id: cache-llvm-macos
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/Library/Caches/Homebrew
+          /usr/local/Cellar/llvm@21
+          /opt/homebrew/Cellar/llvm@21
+        key: llvm-${{ env.LLVM_VERSION }}-macos-${{ runner.arch }}
+        restore-keys: |
+          llvm-21-macos-${{ runner.arch }}
+
+    - name: Install LLVM (Linux)
+      if: runner.os == 'Linux' && steps.cache-llvm-linux.outputs.cache-hit != 'true'
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 21
+        sudo apt-get install -y llvm-21-dev libclang-21-dev
+
+    - name: Setup LLVM Environment (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        echo "LLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm" >> $GITHUB_ENV
+        echo "/usr/lib/llvm-21/bin" >> $GITHUB_PATH
+
+    - name: Install LLVM (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install llvm@21
+        echo "LLVM_DIR=$(brew --prefix llvm@21)/lib/cmake/llvm" >> $GITHUB_ENV
+        echo "$(brew --prefix llvm@21)/bin" >> $GITHUB_PATH
+        echo "LDFLAGS=-L$(brew --prefix llvm@21)/lib" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I$(brew --prefix llvm@21)/include" >> $GITHUB_ENV
+
+    - name: Ensure 7-Zip is installed (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $7zPath = Get-Command 7z -ErrorAction SilentlyContinue
+        
+        if (-not $7zPath) {
+          Write-Host "7-Zip not found, installing..."
+          choco install 7zip -y
+
+          $env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        } else {
+          Write-Host "7-Zip is already installed at: $($7zPath.Source)"
+        }
+        
+        7z --help | Select-Object -First 2
+
+    - name: Download LLVM (Windows)
+      if: runner.os == 'Windows' && steps.cache-llvm-windows.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $llvmUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/${{ matrix.llvm_archive }}"
+        $llvmSigUrl = "$llvmUrl.sig"
+        
+        Write-Host "Downloading LLVM from $llvmUrl"
+        Invoke-WebRequest -Uri $llvmUrl -OutFile "llvm.tar.xz"
+        Invoke-WebRequest -Uri $llvmSigUrl -OutFile "llvm.tar.xz.sig"
+        
+        Write-Host "LLVM archive downloaded"
+
+    - name: Extract LLVM (Windows)
+      if: runner.os == 'Windows' && steps.cache-llvm-windows.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        Write-Host "Extracting LLVM archive..."
+        
+        7z x llvm.tar.xz
+        7z x llvm.tar
+        
+        $llvmDir = Get-ChildItem -Directory -Filter "clang+llvm-*" | Select-Object -First 1
+        Move-Item $llvmDir.FullName llvm-windows
+        
+        Remove-Item llvm.tar -ErrorAction SilentlyContinue
+        
+        Write-Host "LLVM extracted to llvm-windows"
+
+    - name: Setup LLVM Environment (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $llvmPath = "${{ github.workspace }}/llvm-windows"
+        echo "LLVM_DIR=$llvmPath/lib/cmake/llvm" >> $env:GITHUB_ENV
+        echo "$llvmPath/bin" >> $env:GITHUB_PATH
+
+    - name: Install CMake
+      uses: jwlawson/actions-setup-cmake@v2
+      with:
+        cmake-version: '${{ env.CMAKE_VERSION }}.x'
+
+    - name: Cache CMake Build
+      uses: actions/cache@v4
+      with:
+        path: build
+        key: cmake-build-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt', 'src/**/*.cpp', 'include/**/*.h') }}
+        restore-keys: |
+          cmake-build-${{ runner.os }}-
+
+    - name: Configure CMake (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR=$LLVM_DIR
+
+    - name: Configure CMake (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR=$env:LLVM_DIR
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Verify Build
+      shell: bash
+      run: |
+        if [ -f "${{ matrix.executable_path }}" ]; then
+          echo "✓ Executable built successfully: ${{ matrix.executable_path }}"
+          ls -lh "${{ matrix.executable_path }}"
+          
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            SIZE=$(stat -c%s "${{ matrix.executable_path }}" 2>/dev/null || stat -f%z "${{ matrix.executable_path }}")
+          else
+            SIZE=$(stat -c%s "${{ matrix.executable_path }}" 2>/dev/null || stat -f%z "${{ matrix.executable_path }}")
+          fi
+          SIZE_MB=$(echo "scale=2; $SIZE / 1024 / 1024" | bc 2>/dev/null || echo "N/A")
+          echo "📦 Binary size: ${SIZE_MB} MB"
+        else
+          echo "✗ Executable not found at: ${{ matrix.executable_path }}"
+          exit 1
+        fi
+
+    - name: Run Compiler Tests (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        echo "Running compiler test suite..."
+        
+        COMPILER="${{ matrix.executable_path }}"
+        TEST_DIR="tests"
+        PASSED=0
+        FAILED=0
+        TOTAL=0
+        
+        mkdir -p test_output
+        
+        if [ ! -d "$TEST_DIR" ]; then
+          echo "⚠️  No tests directory found, skipping tests"
+          exit 0
+        fi
+        
+        for test_file in "$TEST_DIR"/*.rac; do
+          if [ ! -f "$test_file" ]; then
+            echo "⚠️  No test files found in $TEST_DIR"
+            exit 0
+          fi
+          
+          TOTAL=$((TOTAL + 1))
+          test_name=$(basename "$test_file" .rac)
+          expected_code=$(head -n 5 "$test_file" | grep -oP '//\s*EXPECT:\s*\K\d+' || echo "0")
+          
+          echo ""
+          echo "[$TOTAL] Testing: $test_name (expecting exit code: $expected_code)"
+          
+          output_exe="test_output/${test_name}"
+          
+          if "$COMPILER" "$test_file" -o "$output_exe" 2>&1; then
+            echo "  ✓ Compilation successful"
+            
+            set +e
+            chmod +x "$output_exe"
+            "$output_exe"
+            actual_code=$?
+            set -e
+            
+            if [ "$actual_code" -eq "$expected_code" ]; then
+              echo "  ✓ Exit code correct: $actual_code"
+              PASSED=$((PASSED + 1))
+            else
+              echo "  ✗ Exit code mismatch: expected $expected_code, got $actual_code"
+              FAILED=$((FAILED + 1))
+            fi
+          else
+            echo "  ✗ Compilation failed"
+            FAILED=$((FAILED + 1))
+          fi
+        done
+        
+        echo ""
+        echo "========================================"
+        echo "Test Summary"
+        echo "========================================"
+        echo "Total:  $TOTAL"
+        echo "Passed: $PASSED"
+        echo "Failed: $FAILED"
+        echo "========================================"
+        
+        if [ $FAILED -gt 0 ]; then
+          echo "❌ Some tests failed"
+          exit 1
+        elif [ $TOTAL -eq 0 ]; then
+          echo "⚠️  No tests were run"
+        else
+          echo "✅ All tests passed!"
+        fi
+
+    - name: Run Compiler Tests (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Write-Host "Running compiler test suite..."
+        
+        $compiler = "${{ matrix.executable_path }}"
+        $testDir = "tests"
+        $passed = 0
+        $failed = 0
+        $total = 0
+        
+        New-Item -ItemType Directory -Force -Path test_output | Out-Null
+        
+        if (-not (Test-Path $testDir)) {
+          Write-Host "⚠️  No tests directory found, skipping tests"
+          exit 0
+        }
+        
+        $testFiles = Get-ChildItem -Path $testDir -Filter *.rac
+        
+        if ($testFiles.Count -eq 0) {
+          Write-Host "⚠️  No test files found in $testDir"
+          exit 0
+        }
+        
+        foreach ($testFile in $testFiles) {
+          $total++
+          $testName = $testFile.BaseName
+          
+          $expectedCode = 0
+          $content = Get-Content $testFile.FullName -TotalCount 5
+          foreach ($line in $content) {
+            if ($line -match '//\s*EXPECT:\s*(\d+)') {
+              $expectedCode = [int]$matches[1]
+              break
+            }
+          }
+          
+          Write-Host ""
+          Write-Host "[$total] Testing: $testName (expecting exit code: $expectedCode)"
+          
+          $outputExe = "test_output\$testName.exe"
+          
+          $compileResult = & $compiler $testFile.FullName -o $outputExe 2>&1
+          
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "  ✓ Compilation successful"
+            
+            & $outputExe
+            $actualCode = $LASTEXITCODE
+            
+            if ($actualCode -eq $expectedCode) {
+              Write-Host "  ✓ Exit code correct: $actualCode"
+              $passed++
+            } else {
+              Write-Host "  ✗ Exit code mismatch: expected $expectedCode, got $actualCode"
+              $failed++
+            }
+          } else {
+            Write-Host "  ✗ Compilation failed"
+            Write-Host $compileResult
+            $failed++
+          }
+        }
+        
+        Write-Host ""
+        Write-Host "========================================"
+        Write-Host "Test Summary"
+        Write-Host "========================================"
+        Write-Host "Total:  $total"
+        Write-Host "Passed: $passed"
+        Write-Host "Failed: $failed"
+        Write-Host "========================================"
+        
+        if ($failed -gt 0) {
+          Write-Host "❌ Some tests failed"
+          exit 1
+        } elseif ($total -eq 0) {
+          Write-Host "⚠️  No tests were run"
+        } else {
+          Write-Host "✅ All tests passed!"
+        }
+
+    - name: Compiler Version Info
+      shell: bash
+      run: |
+        echo "========================================="
+        echo "RaccoonCompiler Build Information"
+        echo "========================================="
+        echo "Version: $(git describe --tags --always --dirty)"
+        echo "Commit: ${{ github.sha }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Built on: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "Platform: ${{ runner.os }}"
+        echo "========================================="
+
+    - name: Prepare Artifact (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        mkdir artifact
+        cp ${{ matrix.executable_path }} artifact/
+        chmod +x artifact/${{ matrix.executable_name }}
+
+    - name: Prepare Artifact (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Path artifact
+        Copy-Item ${{ matrix.executable_path }} artifact/
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: artifact/${{ matrix.executable_name }}
+        if-no-files-found: error
+        retention-days: 30
+
+  create-release:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: artifacts/**/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

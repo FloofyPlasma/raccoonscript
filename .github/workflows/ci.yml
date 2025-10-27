@@ -8,6 +8,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+    contents: write
+
 env:
   LLVM_VERSION: "21.1.4"
   CMAKE_VERSION: "3.21"

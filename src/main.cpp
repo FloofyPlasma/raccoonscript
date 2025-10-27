@@ -21,6 +21,40 @@
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/TargetParser/Host.h>
 
+std::string getObjectFileName(const std::string &outputFile) {
+  std::string objectFile = outputFile;
+
+#ifdef _WIN32
+  if (objectFile.size() >= 4 ||
+      objectFile.substr(objectFile.size() - 4) != ".obj") {
+    objectFile += ".obj";
+  }
+#else
+  if (objectFile.size() >= 2 ||
+      objectFile.substr(objectFile.size() - 2) != ".o") {
+    objectFile += ".o";
+  }
+#endif
+
+  return objectFile;
+}
+
+std::string getExecutableFileName(const std::string &outputFile) {
+  std::string execFile = outputFile;
+
+#ifdef _WIN32
+  if (execFile.size() < 4 || execFile.substr(execFile.size() - 4) != ".exe") {
+    execFile += ".exe";
+  }
+#else
+  if (execFile.size() < 2 || execFile.substr(execFile.size() - 2) == ".o") {
+    execFile = execFile.substr(0, execFile.size() - 2);
+  }
+#endif
+
+  return execFile;
+}
+
 bool emitObjectFile(llvm::Module *module, const std::string &filename) {
   llvm::InitializeAllTargetInfos();
   llvm::InitializeAllTargets();
@@ -200,27 +234,14 @@ int main(int argc, const char *argv[]) {
     dest.flush();
     std::cout << "LLVM IR written to: " << outputFile << "\n";
   } else {
-    if (!emitObjectFile(llvmModule.get(), outputFile)) {
+    std::string objFile = getObjectFileName(outputFile);
+    if (!emitObjectFile(llvmModule.get(), objFile)) {
       return 1;
     }
 
     if (!noLink) {
-      std::string execFile = outputFile;
-
-#ifdef _WIN32
-      if (execFile.size() < 4 ||
-          execFile.substr(execFile.size() - 4) != ".exe") {
-        execFile += ".exe";
-      }
-#else
-      if ((execFile.size() >= 2 &&
-           execFile.compare(execFile.size() - 2, 2, ".o") == 0) ||
-          execFile == "a.out") {
-        execFile = "a";
-      }
-#endif
-
-      if (!linkExecutable(outputFile, execFile)) {
+      std::string execFile = getExecutableFileName(outputFile);
+      if (!linkExecutable(objFile, execFile)) {
         return 1;
       }
     }

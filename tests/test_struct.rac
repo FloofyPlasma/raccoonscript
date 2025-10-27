@@ -1,3 +1,5 @@
+// EXPECT: 10
+
 // Simple 2D point struct
 struct Point {
     x: f32;

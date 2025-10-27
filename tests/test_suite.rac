@@ -1,3 +1,5 @@
+// EXPECT: 12
+
 // Test suite for RaccoonScript language features
 
 // ---- Variable declarations and basic types ----

@@ -55,7 +55,7 @@ jobs:
       uses: awalsh128/cache-apt-pkgs-action@latest
       with:
         version: 21
-        packages: llvm-21-dev libclang-21-dev
+        packages: "llvm-21-dev libclang-21-dev"
 
     - name: Cache Homebrew (macOS)
       if: runner.os == 'macOS'

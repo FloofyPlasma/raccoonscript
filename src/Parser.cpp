@@ -7,6 +7,11 @@
 void Parser::advance() { this->current = this->lexer.nextToken(); }
 
 Statement *Parser::parseStatement(bool insideFunction) {
+  if (!insideFunction && this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "import") {
+    return this->parseImportDecl();
+  }
+
   if (this->current.type == TokenType::Keyword &&
       (this->current.lexeme == "let" || this->current.lexeme == "const")) {
     bool isConst = (this->current.lexeme == "const");
@@ -799,4 +804,32 @@ Statement *Parser::parseStructDecl() {
   this->advance(); // consume '}'
 
   return new StructDecl(name, fields, false);
+}
+
+Statement *Parser::parseImportDecl() {
+  this->advance(); // consume 'import'
+
+  if (this->current.type != TokenType::Identifier) {
+    return nullptr; // error
+  }
+
+  std::string modulePath = this->current.lexeme;
+  this->advance(); // consume module name
+
+  while (this->current.type == TokenType::Dot) {
+    this->advance(); // consume '.'
+
+    if (this->current.type != TokenType::Identifier) {
+      return nullptr; // error
+    }
+
+    modulePath += "/" + this->current.lexeme;
+    this->advance(); // consume identifier
+  }
+
+  if (this->current.type != TokenType::Semicolon) {
+    return nullptr;
+  }
+
+  return new ImportDecl(modulePath);
 }

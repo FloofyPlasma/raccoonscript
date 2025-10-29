@@ -24,6 +24,7 @@ public:
   Statement *parseReturnStatement();
   Statement *parseBlockStatement();
   Statement *parseStructDecl();
+  Statement* parseImportDecl();
 
   Expr *parsePrimary();
 

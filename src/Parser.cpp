@@ -193,7 +193,7 @@ Statement *Parser::parseFunctionDecl() {
   } // missing '}'
   this->advance(); // consume '}'
 
-  return new FunctionDecl(name, params, body, returnType);
+  return new FunctionDecl(name, params, body, returnType, false);
 }
 
 Expr *Parser::parseExpression(int precedence) {
@@ -798,5 +798,5 @@ Statement *Parser::parseStructDecl() {
   }
   this->advance(); // consume '}'
 
-  return new StructDecl(name, fields);
+  return new StructDecl(name, fields, false);
 }

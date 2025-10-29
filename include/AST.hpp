@@ -92,17 +92,21 @@ struct FunctionDecl : Statement {
   std::vector<std::pair<std::string, std::string>> params; // name + type
   std::vector<Statement *> body;
   std::string returnType;
+  bool isExported;
+
   FunctionDecl(std::string n,
                std::vector<std::pair<std::string, std::string>> p,
-               std::vector<Statement *> b, std::string r)
-      : name(n), params(p), body(b), returnType(r) {}
+               std::vector<Statement *> b, std::string r, bool exported = false)
+      : name(n), params(p), body(b), returnType(r), isExported(exported) {}
 };
 
 struct StructDecl : Statement {
   std::string name;
   std::vector<std::pair<std::string, std::string>> fields; // name + type
-  StructDecl(std::string n, std::vector<std::pair<std::string, std::string>> f)
-      : name(n), fields(f) {}
+  bool isExported;
+  StructDecl(std::string n, std::vector<std::pair<std::string, std::string>> f,
+             bool exported = false)
+      : name(n), fields(f), isExported(exported) {}
 };
 
 struct ImportDecl : Statement {

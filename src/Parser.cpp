@@ -12,6 +12,31 @@ Statement *Parser::parseStatement(bool insideFunction) {
     return this->parseImportDecl();
   }
 
+  if (!insideFunction && this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "export") {
+    this->advance(); // consume 'export'
+
+    if (this->current.type == TokenType::Keyword &&
+        this->current.lexeme == "fun") {
+      Statement *funcDecl = this->parseFunctionDecl();
+      if (FunctionDecl *fd = dynamic_cast<FunctionDecl *>(funcDecl)) {
+        fd->isExported = true;
+      }
+      return funcDecl;
+    }
+
+    if (this->current.type == TokenType::Keyword &&
+        this->current.lexeme == "struct") {
+      Statement *structDecl = this->parseStructDecl();
+      if (StructDecl *sd = dynamic_cast<StructDecl *>(structDecl)) {
+        sd->isExported = true;
+      }
+      return structDecl;
+    }
+
+    return nullptr; // error
+  }
+
   if (this->current.type == TokenType::Keyword &&
       (this->current.lexeme == "let" || this->current.lexeme == "const")) {
     bool isConst = (this->current.lexeme == "const");

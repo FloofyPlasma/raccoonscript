@@ -64,8 +64,10 @@ struct CallExpr : Expr {
   std::string name;
   std::vector<Expr *> args;
   std::string type;
-  CallExpr(std::string n, std::vector<Expr *> a, std::string t)
-      : name(n), args(a), type(t) {}
+  std::string moduleName;
+  CallExpr(std::string n, std::vector<Expr *> a, std::string t,
+           std::string m = "")
+      : name(n), args(a), type(t), moduleName(m) {}
 };
 
 struct MemberAccessExpr : Expr {

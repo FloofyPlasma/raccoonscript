@@ -703,6 +703,59 @@ llvm::Value *Codegen::genCallExpr(CallExpr *expr) {
         builder->CreateBitCast(ptrVal, builder->getPtrTy(), "freeCast");
     return builder->CreateCall(freeFunc, {casted});
   }
+
+  std::string functionName = expr->name;
+
+  if (!expr->moduleName.empty()) {
+    // Qualified call: module.function
+    auto it = this->importedModules.find(expr->moduleName);
+    if (it == this->importedModules.end()) {
+      fprintf(stderr, "Error: Module '%s' not imported.\n",
+              expr->moduleName.c_str());
+      std::abort();
+    }
+
+    const ExportedFunction *exportedFunc = it->second.findFunction(expr->name);
+    if (!exportedFunc) {
+      fprintf(stderr, "Error: Function '%s' not found in module '%s'.\n",
+              expr->name.c_str(), expr->moduleName.c_str());
+      std::abort();
+    }
+
+    functionName = expr->moduleName + "_" + expr->name;
+
+    llvm::Function *callee = this->module->getFunction(functionName);
+    if (!callee) {
+      std::vector<llvm::Type *> paramTypes;
+      for (const auto &param : exportedFunc->params) {
+        paramTypes.push_back(this->getLLVMType(param.second, this->context));
+      }
+
+      llvm::Type *returnType =
+          this->getLLVMType(exportedFunc->returnType, this->context);
+      llvm::FunctionType *funcType =
+          llvm::FunctionType::get(returnType, paramTypes, false);
+
+      callee = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage,
+                                      functionName, this->module.get());
+    }
+
+    std::vector<llvm::Value *> args;
+    for (auto *argExpr : expr->args) {
+      llvm::Value *argVal = this->genExpr(argExpr);
+      if (!argVal) {
+        fprintf(stderr, "Error: Invalid argument in call to '%s.%s'.\n",
+                expr->moduleName.c_str(), expr->name.c_str());
+        std::abort();
+      }
+      args.push_back(argVal);
+    }
+
+    return this->builder->CreateCall(
+        callee, args, callee->getReturnType()->isVoidTy() ? "" : "calltmp");
+  }
+
+  // Unqualified call
   llvm::Function *callee = this->module->getFunction(expr->name);
   if (!callee) {
     fprintf(stderr, "Error: Unknown function '%s',\n", expr->name.c_str());

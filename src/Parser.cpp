@@ -307,6 +307,20 @@ Expr *Parser::parsePrimary() {
       this->advance();
     }
 
+    std::string moduleName = "";
+    if (this->current.type == TokenType::Dot) {
+      // This is a module-qualified name: module.something
+      moduleName = name;
+      this->advance(); // consume '.'
+
+      if (this->current.type != TokenType::Identifier) {
+        return nullptr;
+      }
+
+      name = this->current.lexeme;
+      this->advance(); // consume identifier
+    }
+
     if (this->current.type == TokenType::LeftBrace) {
       this->advance(); // consume '{'
 
@@ -385,7 +399,7 @@ Expr *Parser::parsePrimary() {
         return nullptr;
       }
       this->advance();
-      return new CallExpr(name, args, "");
+      return new CallExpr(name, args, "", moduleName);
     }
 
     return new Variable(name);

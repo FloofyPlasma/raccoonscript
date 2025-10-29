@@ -29,7 +29,22 @@ set(SOURCES
 
 add_executable(raccoonc ${SOURCES})
 
-target_link_libraries(raccoonc LLVM)
+if(WIN32)
+    llvm_map_components_to_libnames(llvm_libs
+        Core
+        Support
+        IRReader
+        Target
+        ${LLVM_TARGETS_TO_BUILD}
+    )
+    
+    list(FILTER llvm_libs EXCLUDE REGEX "diaguids")
+    
+    message(STATUS "LLVM libraries (Windows): ${llvm_libs}")
+    target_link_libraries(raccoonc ${llvm_libs})
+else()
+    target_link_libraries(raccoonc LLVM)
+endif()
 
 if(WIN32)
     target_link_libraries(raccoonc ntdll)

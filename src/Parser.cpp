@@ -375,7 +375,7 @@ Expr *Parser::parsePrimary() {
       }
       this->advance(); // consume '}'
 
-      return new StructLiteral(name, fieldInits);
+      return new StructLiteral(name, fieldInits, moduleName);
     }
 
     if (this->current.type == TokenType::LeftParen) {

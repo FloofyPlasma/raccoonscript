@@ -1178,10 +1178,30 @@ void Codegen::genStructDecl(StructDecl *structDecl) {
 }
 
 llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
-  auto it = this->structTypes.find(expr->typeName);
+  std::string structName = expr->typeName;
+  if (!expr->moduleName.empty()) {
+    auto it = this->importedModules.find(expr->moduleName);
+    if (it == this->importedModules.end()) {
+      fprintf(stderr, "Error: Module '%s' not imported.\n",
+              expr->moduleName.c_str());
+      std::abort();
+    }
+
+    const ExportedStruct *exportedStruct =
+        it->second.findStruct(expr->typeName);
+    if (!exportedStruct) {
+      fprintf(stderr, "Error: Struct '%s' not found in module '%s'.\n",
+              expr->typeName.c_str(), expr->moduleName.c_str());
+      std::abort();
+    }
+
+    // Use the struct name directly (already loaded in loadImport)
+    structName = expr->typeName;
+  }
+
+  auto it = this->structTypes.find(structName);
   if (it == this->structTypes.end()) {
-    fprintf(stderr, "Error: Unknown struct type '%s'.\n",
-            expr->typeName.c_str());
+    fprintf(stderr, "Error: Unknown struct type '%s'.\n", structName.c_str());
     std::abort();
   }
 
@@ -1203,10 +1223,10 @@ llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
 
   this->builder->restoreIP(oldIP);
 
-  auto metaIt = this->structFieldMetadata.find(expr->typeName);
+  auto metaIt = this->structFieldMetadata.find(structName);
   if (metaIt == this->structFieldMetadata.end()) {
     fprintf(stderr, "Error: No field metadata for struct '%s'.\n",
-            expr->typeName.c_str());
+            structName.c_str());
     std::abort();
   }
 
@@ -1215,7 +1235,7 @@ llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
   if (expr->fields.size() != structFields.size()) {
     fprintf(stderr,
             "Error: Struct '%s' requires %zu fields, but %zu were provided.\n",
-            expr->typeName.c_str(), structFields.size(), expr->fields.size());
+            structName.c_str(), structFields.size(), expr->fields.size());
     std::abort();
   }
 
@@ -1223,7 +1243,7 @@ llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
     const std::string &fieldName = fieldInit.first;
     Expr *fieldValue = fieldInit.second;
 
-    int fieldIndex = this->getFieldIndex(expr->typeName, fieldName);
+    int fieldIndex = this->getFieldIndex(structName, fieldName);
 
     llvm::Value *value = this->genExpr(fieldValue);
     if (!value) {

@@ -38,8 +38,10 @@ struct CharLiteral : Expr {
 struct StructLiteral : Expr {
   std::string typeName;
   std::vector<std::pair<std::string, Expr *>> fields; // field name + value
-  StructLiteral(std::string t, std::vector<std::pair<std::string, Expr *>> f)
-      : typeName(t), fields(f) {}
+  std::string moduleName;
+  StructLiteral(std::string t, std::vector<std::pair<std::string, Expr *>> f,
+                std::string m = "")
+      : typeName(t), fields(f), moduleName(m) {}
 };
 
 struct UnaryExpr : Expr {

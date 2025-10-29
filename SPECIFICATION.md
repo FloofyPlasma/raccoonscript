@@ -4,11 +4,11 @@
 
 * **Statically typed**, with explicit types for variables and functions.
 * **Manual memory management** via `malloc<T>(count)` and `free(ptr)`.
-* **Function types** are first-class.
 * **Block scoping** and **variable shadowing** allowed.
 * **Each file is a module**; standard modules use `import std.name;`.
 * **No garbage collector**, **no namespaces**, **no operator overloading**.
 * Strings are pointer types (`i8*`) or `char*`.
+
 ---
 
 ## Keywords
@@ -71,24 +71,9 @@ fun add(x: i32, y: i32): i32 {
 }
 ```
 
-### Lambdas
-
-```racoon
-let double = fun(i32 x) x * 2;
-let verbose = fun(i32 x) {
-    let y = x + 1;
-    return y * y;
-};
-```
-
-### First-Class Functions
-
-```racoon
-type Op = fun(i32, i32): i32;
-fun apply(Op op, i32 a, i32 b): i32 {
-    return op(a, b);
-}
-```
+* Functions must be declared at the top level (not inside other functions or blocks).
+* Function parameters and return types must be explicitly specified.
+* Functions can call other functions defined in the same module or imported modules.
 
 ---
 
@@ -153,47 +138,13 @@ free(p);
 
 ---
 
-## Closures
-
-### Value Capture (Default)
-
-```racoon
-fun make_counter(): fun(): i32 {
-    let ptr = malloc<i32>(1);
-    *ptr = 0;
-    return fun() {
-        *ptr = *ptr + 1;
-        return *ptr;
-    };
-}
-```
-
-### Reference Capture
-
-```racoon
-let code: i32;
-get_error_code(fun&(x) code = x);
-```
-
-* `fun&(...)` captures by reference
-* `fun&` closures **cannot escape** their defining scope
-
-### Semantics
-
-| Style  | Pointer Capture | Mutable | Can Escape |
-| ------ | --------------- | ------- | ---------- |
-| `fun`  | Yes (copy)      | No      | Yes        |
-| `fun&` | Yes (borrow)    | Yes     | No         |
-
----
-
 ## Modules
 
 Each `.rac` file is a module.
 
 ```racoon
 // math.rac
-export fun add(i32 x, i32 y): i32 {
+export fun add(x: i32, y: i32): i32 {
     return x + y;
 }
 
@@ -210,24 +161,16 @@ fun main(): void {
 
 ---
 
-## Namespaces and Currying
+## Namespaces
 
-* No namespaces
-* No currying
-
-```racoon
-fun add(i32 x, i32 y): i32 { return x + y; }
-add(1); // Error
-
-let add5 = fun(i32 y) add(5, y); // OK
-```
+* No namespaces - use module prefixes for organization
 
 ---
 
 ## Void Type
 
 ```racoon
-fun print_value(i32 x): void {
+fun print_value(x: i32): void {
     print(x);
 }
 ```
@@ -240,17 +183,17 @@ fun print_value(i32 x): void {
 
 ```racoon
 // math.rac
-export fun make_adder(i32 x): fun(i32): i32 {
-    return fun(i32 y) x + y;
-}
-
 export struct Vec2 {
     x: f32;
     y: f32;
 }
 
-export fun length(Vec2 v): f32 {
+export fun length(v: Vec2): f32 {
     return sqrt(v.x * v.x + v.y * v.y);
+}
+
+export fun add_vectors(a: Vec2, b: Vec2): Vec2 {
+    return Vec2 { x: a.x + b.x, y: a.y + b.y };
 }
 ```
 
@@ -259,18 +202,18 @@ export fun length(Vec2 v): f32 {
 import math;
 
 fun main(): void {
-    let add10 = math.make_adder(10);
-    let result = add10(5);
-
-    let v = math.Vec2 { x: 3.0, y: 4.0 };
-    let len = math.length(v);
+    let v1 = math.Vec2 { x: 3.0, y: 4.0 };
+    let v2 = math.Vec2 { x: 1.0, y: 2.0 };
+    
+    let len = math.length(v1);
+    let sum = math.add_vectors(v1, v2);
 
     if (len > 0.0) {
         print("Non-zero vector");
     }
 
     for (let i = 0; i < 3; i = i + 1) {
-        print(result);
+        print(sum.x);
     }
 }
 ```

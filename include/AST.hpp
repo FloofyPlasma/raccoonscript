@@ -105,6 +105,11 @@ struct StructDecl : Statement {
       : name(n), fields(f) {}
 };
 
+struct ImportDecl : Statement {
+  std::string modulePath;
+  ImportDecl(std::string p) : modulePath(p) {}
+};
+
 struct ExprStmt : Statement {
   Expr *expr;
   ExprStmt(Expr *e) : expr(e) {}

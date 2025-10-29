@@ -28,6 +28,8 @@ public:
 
   std::unique_ptr<llvm::Module> takeModule();
 
+  void setModuleName(const std::string &name);
+
 private:
   llvm::LLVMContext context;
   std::unique_ptr<llvm::Module> module;
@@ -37,6 +39,7 @@ private:
   std::unordered_map<std::string,
                      std::vector<std::pair<std::string, std::string>>>
       structFieldMetadata;
+  std::string currentModuleName;
 
   static std::string getPointedToType(const std::string &ptrType) {
     if (ptrType.empty() || ptrType.back() != '*') {

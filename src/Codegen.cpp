@@ -120,7 +120,8 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
 
 Codegen::Codegen(const std::string &moduleName)
     : module(std::make_unique<Module>(moduleName, context)),
-      builder(std::make_unique<IRBuilder<>>(context)) {
+      builder(std::make_unique<IRBuilder<>>(context)),
+      currentModuleName(moduleName) {
   this->pushScope();
 }
 
@@ -296,9 +297,16 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
 
   llvm::FunctionType *funcType =
       llvm::FunctionType::get(retTy, argTypes, false);
+
+  // Name mangling (module_functionName)
+  std::string functionName = funcDecl->name;
+  if (funcDecl->isExported && !this->currentModuleName.empty()) {
+    functionName = this->currentModuleName + "_" + funcDecl->name;
+  }
+
   llvm::Function *function =
       llvm::Function::Create(funcType, llvm::Function::ExternalLinkage,
-                             funcDecl->name, this->module.get());
+                             functionName, this->module.get());
 
   // Create entry block
   llvm::BasicBlock *entry =
@@ -1251,4 +1259,8 @@ llvm::Value *Codegen::genMemberAccessExpr(MemberAccessExpr *expr) {
       structType, structPtr, fieldIndex, expr->field + "_ptr");
 
   return this->builder->CreateLoad(fieldType, fieldPtr, expr->field);
+}
+
+void Codegen::setModuleName(const std::string &moduleName) {
+  this->currentModuleName = moduleName;
 }

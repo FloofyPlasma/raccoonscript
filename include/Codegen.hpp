@@ -11,6 +11,7 @@
 #include <llvm/IR/Value.h>
 
 #include "AST.hpp"
+#include "ModuleMetadata.hpp"
 
 struct LocalVar {
   llvm::AllocaInst *alloca;
@@ -29,6 +30,7 @@ public:
   std::unique_ptr<llvm::Module> takeModule();
 
   void setModuleName(const std::string &name);
+  ModuleMetadata getExportedSymbols() const;
 
 private:
   llvm::LLVMContext context;
@@ -40,6 +42,7 @@ private:
                      std::vector<std::pair<std::string, std::string>>>
       structFieldMetadata;
   std::string currentModuleName;
+  ModuleMetadata currentModuleExports;
 
   static std::string getPointedToType(const std::string &ptrType) {
     if (ptrType.empty() || ptrType.back() != '*') {

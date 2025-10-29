@@ -123,6 +123,7 @@ Codegen::Codegen(const std::string &moduleName)
       builder(std::make_unique<IRBuilder<>>(context)),
       currentModuleName(moduleName) {
   this->pushScope();
+  this->currentModuleExports.moduleName = moduleName;
 }
 
 Codegen::~Codegen() { this->scopeStack.clear(); }
@@ -302,6 +303,12 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
   std::string functionName = funcDecl->name;
   if (funcDecl->isExported && !this->currentModuleName.empty()) {
     functionName = this->currentModuleName + "_" + funcDecl->name;
+
+    ExportedFunction exportedFunc;
+    exportedFunc.name = funcDecl->name;
+    exportedFunc.params = funcDecl->params;
+    exportedFunc.returnType = funcDecl->returnType;
+    this->currentModuleExports.functions.push_back(exportedFunc);
   }
 
   llvm::Function *function =
@@ -1108,6 +1115,13 @@ void Codegen::genStructDecl(StructDecl *structDecl) {
   this->structTypes[structDecl->name] = structType;
 
   this->structFieldMetadata[structDecl->name] = structDecl->fields;
+
+  if (structDecl->isExported) {
+    ExportedStruct exportedStruct;
+    exportedStruct.name = structDecl->name;
+    exportedStruct.fields = structDecl->fields;
+    this->currentModuleExports.structs.push_back(exportedStruct);
+  }
 }
 
 llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
@@ -1261,6 +1275,12 @@ llvm::Value *Codegen::genMemberAccessExpr(MemberAccessExpr *expr) {
   return this->builder->CreateLoad(fieldType, fieldPtr, expr->field);
 }
 
+// MARK: Modules
+
 void Codegen::setModuleName(const std::string &moduleName) {
   this->currentModuleName = moduleName;
+}
+
+ModuleMetadata Codegen::getExportedSymbols() const {
+  return this->currentModuleExports;
 }

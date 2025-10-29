@@ -1284,3 +1284,54 @@ void Codegen::setModuleName(const std::string &moduleName) {
 ModuleMetadata Codegen::getExportedSymbols() const {
   return this->currentModuleExports;
 }
+
+void Codegen::loadImport(const std::string &modulePath,
+                         const std::string &baseDir) {
+  if (this->importedModules.find(modulePath) != this->importedModules.end()) {
+    return;
+  }
+
+  std::string metadataPath = baseDir;
+  if (!metadataPath.empty() && metadataPath.back() != '/' &&
+      metadataPath.back() != '\\') {
+    metadataPath += "/";
+  }
+  metadataPath += modulePath + ".racm";
+
+  ModuleMetadata metadata = ModuleMetadata::loadFromFile(metadataPath);
+
+  if (metadata.moduleName.empty()) {
+    fprintf(stderr, "Error: Failed to load module metadata from '%s'\n",
+            metadataPath.c_str());
+    std::abort();
+  }
+
+  this->importedModules[modulePath] = metadata;
+
+  for (const auto &exportedStruct : metadata.structs) {
+    if (this->structTypes.find(exportedStruct.name) !=
+        this->structTypes.end()) {
+      continue;
+    }
+
+    std::vector<llvm::Type *> fieldTypes;
+    for (const auto &field : exportedStruct.fields) {
+      llvm::Type *fieldType = this->getLLVMType(field.second, this->context);
+      if (!fieldType) {
+        fprintf(stderr,
+                "Error: Invalid type '%s' for field '%s' in imported struct "
+                "'%s'.\n",
+                field.second.c_str(), field.first.c_str(),
+                exportedStruct.name.c_str());
+        std::abort();
+      }
+      fieldTypes.push_back(fieldType);
+    }
+
+    llvm::StructType *structType = llvm::StructType::create(
+        this->context, fieldTypes, exportedStruct.name);
+
+    this->structTypes[exportedStruct.name] = structType;
+    this->structFieldMetadata[exportedStruct.name] = exportedStruct.fields;
+  }
+}

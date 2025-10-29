@@ -32,6 +32,8 @@ public:
   void setModuleName(const std::string &name);
   ModuleMetadata getExportedSymbols() const;
 
+  void loadImport(const std::string &modulePath, const std::string &baseDir);
+
 private:
   llvm::LLVMContext context;
   std::unique_ptr<llvm::Module> module;
@@ -43,6 +45,7 @@ private:
       structFieldMetadata;
   std::string currentModuleName;
   ModuleMetadata currentModuleExports;
+  std::unordered_map<std::string, ModuleMetadata> importedModules;
 
   static std::string getPointedToType(const std::string &ptrType) {
     if (ptrType.empty() || ptrType.back() != '*') {

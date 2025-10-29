@@ -1,0 +1,16 @@
+// EXPECT: 1
+struct Person {
+    age: i32;
+    height: f32;
+    id: i64;
+}
+
+fun doThing(): i32 {
+    let person: Person = Person { age: 18, height: 5.5, id: 50 };
+
+    return 1;
+}
+
+fun main(): i32 {
+    return doThing();
+}

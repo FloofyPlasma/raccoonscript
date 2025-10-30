@@ -888,5 +888,7 @@ Statement *Parser::parseImportDecl() {
     return nullptr;
   }
 
+  this->advance(); // consume ';'
+
   return new ImportDecl(modulePath);
 }

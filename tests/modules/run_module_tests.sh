@@ -42,7 +42,7 @@ run_test() {
     local compile_failed=0
     
     for file in "${files[@]}"; do
-        local obj_file="${file%.rac}.o"
+        local obj_file="${file%.rac}"
         if ! "$COMPILER" "$file" -o "$obj_file" --no-link 2>&1 | head -20; then
             echo "  ✗ Compilation of $file failed"
             compile_failed=1

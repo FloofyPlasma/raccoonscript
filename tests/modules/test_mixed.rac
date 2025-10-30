@@ -1,8 +1,13 @@
 // EXPECT: 11
 import mixed;
 
+// FIXME: Temp workaround until imported types work.
+struct Public2 {
+    data: i32;
+}
+
 fun main(): i32 {
-    let p = mixed.Public { data: 5 };
+    let p: Public2 = mixed.Public { data: 5 };
     let result = mixed.public_func(p.data); // private_func(5) + 1 = 11
     
     let data = mixed.get_public_data(p);

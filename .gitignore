@@ -3,3 +3,8 @@
 .cache
 # clion is better for debugging lol
 .idea 
+
+# Why didn't i do this sooner....
+*.o
+*.racm
+*.out

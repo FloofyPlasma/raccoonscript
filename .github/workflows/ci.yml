@@ -352,8 +352,10 @@ jobs:
           exit 1
         } elseif ($total -eq 0) {
           Write-Host "⚠️  No single-file tests were run"
+          exit 1
         } else {
           Write-Host "✅ All single-file tests passed!"
+          exit 0
         }
 
     - name: Run Module Tests (Linux/macOS)

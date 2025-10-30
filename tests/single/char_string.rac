@@ -4,5 +4,6 @@ fun main(): i32 {
     let s: char* = "test";
     
     // Return ASCII value of 'A'
-    return c;
+    let result: i32 = c;  // Cast char to i32
+    return result;
 }

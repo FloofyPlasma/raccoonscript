@@ -1,12 +1,15 @@
 // EXPECT: 3
 fun main(): i32 {
-    let x = 1;
+    let x: i32 = 1;
+    let result: i32 = 0;
+    
     {
-        let x = 2;
+        let x: i32 = 2;
         {
-            let x = 3;
-            return x;
+            let x: i32 = 3;
+            result = x;
         }
     }
-    return x;
+    
+    return result;
 }

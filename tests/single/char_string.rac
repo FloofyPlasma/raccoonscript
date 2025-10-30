@@ -1,9 +1,8 @@
 // EXPECT: 65
-fun main(): i32 {
+fun main(): char {
     let c: char = 'A';
     let s: char* = "test";
     
     // Return ASCII value of 'A'
-    let result: i32 = c;  // Cast char to i32
-    return result;
+    return c;
 }

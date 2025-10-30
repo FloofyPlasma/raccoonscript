@@ -1,6 +1,7 @@
 #!/bin/bash
 
-COMPILER="${1:-../../build/raccoonc}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPILER="${1:-$SCRIPT_DIR/../../build/raccoonc}"
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 PASSED=0
 FAILED=0

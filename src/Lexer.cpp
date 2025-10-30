@@ -267,3 +267,17 @@ Token Lexer::identifier() {
 
   return {type, lexeme, this->line, this->column};
 }
+
+Token Lexer::peekToken() {
+  size_t oldPos = this->pos;
+  int oldLine = this->line;
+  int oldColumn = this->column;
+
+  Token token = this->nextToken();
+
+  this->pos = oldPos;
+  this->line = oldLine;
+  this->column = oldColumn;
+
+  return token;
+}

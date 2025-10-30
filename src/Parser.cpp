@@ -5,6 +5,7 @@
 #include <string>
 
 void Parser::advance() { this->current = this->lexer.nextToken(); }
+Token Parser::peek() { return this->lexer.peekToken(); }
 
 Statement *Parser::parseStatement(bool insideFunction) {
   if (!insideFunction && this->current.type == TokenType::Keyword &&
@@ -301,7 +302,6 @@ Expr *Parser::parsePrimary() {
   if (this->current.type == TokenType::Identifier) {
     std::string name = this->current.lexeme;
 
-    // Do not advance if at top-level and current token is 'fun'
     if (!(this->current.type == TokenType::Keyword &&
           this->current.lexeme == "fun")) {
       this->advance();
@@ -309,16 +309,30 @@ Expr *Parser::parsePrimary() {
 
     std::string moduleName = "";
     if (this->current.type == TokenType::Dot) {
-      // This is a module-qualified name: module.something
-      moduleName = name;
+      // Look ahead to see if this is module qualification or member access
+      // Module qualification: module.Function(...) or module.Struct{...}
+      // Member access: object.field (handled by parseExpression)
+
       this->advance(); // consume '.'
 
       if (this->current.type != TokenType::Identifier) {
         return nullptr;
       }
 
-      name = this->current.lexeme;
-      this->advance(); // consume identifier
+      std::string afterDot = this->current.lexeme;
+      this->advance(); // consume identifier after dot
+
+      // Check what follows to determine the context
+      if (this->current.type == TokenType::LeftParen ||
+          this->current.type == TokenType::LeftBrace) {
+        // This is module.Function() or module.Struct{}
+        moduleName = name;
+        name = afterDot;
+      } else {
+        // This is object.field - create MemberAccessExpr
+        Variable *obj = new Variable(name);
+        return new MemberAccessExpr(obj, afterDot);
+      }
     }
 
     if (this->current.type == TokenType::LeftBrace) {
@@ -385,6 +399,9 @@ Expr *Parser::parsePrimary() {
              this->current.type != TokenType::EndOfFile) {
         Expr *arg = this->parseExpression();
         if (!arg) {
+          for (auto a : args) {
+            delete a;
+          }
           return nullptr;
         }
         args.push_back(arg);
@@ -415,6 +432,7 @@ Expr *Parser::parsePrimary() {
     this->advance(); // consume ')'
     return expr;
   }
+
   if (current.type == TokenType::Keyword &&
       (current.lexeme == "malloc" || current.lexeme == "free")) {
     std::string name = current.lexeme;
@@ -448,7 +466,7 @@ Expr *Parser::parsePrimary() {
     if (current.type != TokenType::RightParen)
       return nullptr;
     advance();
-    return new CallExpr(name, args, typeArg);
+    return new CallExpr(name, args, typeArg, "");
   }
 
   return nullptr;

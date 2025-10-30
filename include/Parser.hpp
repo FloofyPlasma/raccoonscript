@@ -12,6 +12,7 @@ public:
   Parser(Lexer &l) : lexer(l) { this->advance(); }
 
   void advance();
+  Token peek();
 
   Expr *parseExpression(int precedence = 0);
 

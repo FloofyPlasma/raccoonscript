@@ -5,7 +5,7 @@ export struct Node {
 }
 
 export fun create_node(val: i32): Node* {
-    let n = malloc<Node>(1);
+    let n: Node* = malloc<Node>(1);
     (*n).value = val;
     (*n).next = malloc<Node>(0);
     return n;

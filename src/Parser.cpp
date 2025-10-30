@@ -193,9 +193,14 @@ Statement *Parser::parseFunctionDecl() {
       return nullptr;
     }
     returnType = this->current.lexeme;
-    this->advance(); // consume return type
-  }
+    this->advance(); // consume base type
 
+    // Handle pointer stars for return type
+    while (this->current.type == TokenType::Star) {
+      returnType += "*";
+      this->advance();
+    }
+  }
   // Parse function body
   if (this->current.type != TokenType::LeftBrace) {
     return nullptr;

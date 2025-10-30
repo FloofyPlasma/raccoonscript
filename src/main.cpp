@@ -25,13 +25,15 @@ std::string getObjectFileName(const std::string &outputFile) {
   std::string objectFile = outputFile;
 
 #ifdef _WIN32
-  if (objectFile.size() >= 4 ||
-      objectFile.substr(objectFile.size() - 4) != ".obj") {
+  if (objectFile.size() < 4 ||
+      (objectFile.substr(objectFile.size() - 4) != ".obj" &&
+       objectFile.substr(objectFile.size() - 2) != ".o")) {
     objectFile += ".obj";
   }
 #else
-  if (objectFile.size() >= 2 ||
-      objectFile.substr(objectFile.size() - 2) != ".o") {
+  if (objectFile.size() < 2 ||
+      (objectFile.substr(objectFile.size() - 2) != ".o" &&
+       objectFile.substr(objectFile.size() - 4) != ".obj")) {
     objectFile += ".o";
   }
 #endif

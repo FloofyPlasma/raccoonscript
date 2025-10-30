@@ -364,7 +364,7 @@ jobs:
           echo ""
           echo "Running module test suite..."
           chmod +x tests/modules/run_module_tests.sh
-          tests/modules/run_module_tests.sh "${{ matrix.executable_path }}"
+          tests/modules/run_module_tests.sh "../../${{ matrix.executable_path }}"
           MODULE_EXIT=$?
           
           if [ $MODULE_EXIT -ne 0 ]; then

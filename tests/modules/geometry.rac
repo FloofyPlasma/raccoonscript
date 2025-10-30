@@ -14,8 +14,8 @@ export fun area(r: Rect): f32 {
 }
 
 export fun distance_squared(p1: Point, p2: Point): f32 {
-    let dx = p2.x - p1.x;
-    let dy = p2.y - p1.y;
+    let dx: f32 = p2.x - p1.x;
+    let dy: f32 = p2.y - p1.y;
     return dx * dx + dy * dy;
 }
 

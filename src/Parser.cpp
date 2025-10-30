@@ -114,12 +114,6 @@ Statement *Parser::parseVarDecl(bool isConst) {
       std::cerr << "Failed to parse initializer for variable " << name << "\n";
       return nullptr;
     }
-
-    // Log for debugging
-    if (auto *call = dynamic_cast<CallExpr *>(initializer)) {
-      std::cerr << "Parsed CallExpr for " << name << " to function "
-                << call->name << " with typeArg: " << call->type << "\n";
-    }
   }
 
   if (this->current.type != TokenType::Semicolon) {

@@ -635,8 +635,6 @@ void Codegen::genWhileStatement(WhileStmt *stmt) {
 
 llvm::Value *Codegen::genCallExpr(CallExpr *expr) {
   if (expr->name == "malloc") {
-    printf("Generating malloc for type %s\n", expr->type.c_str());
-
     if (expr->args.size() != 1) {
       fprintf(stderr,
               "Error: malloc<T>(count) requires exactly one argument.\n");

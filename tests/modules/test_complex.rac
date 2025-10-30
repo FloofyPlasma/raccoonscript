@@ -1,12 +1,19 @@
 // EXPECT: 100
 import data;
 
+// FIXME: Imported types are not supported yet
+struct Node2 {
+    value: i32;
+    next: Node*;
+}
+
+
 fun main(): i32 {
-    let node = data.create_node(50);
+    let node: Node* = data.create_node(50);
     
     data.set_value(node, 100);
     
-    let val = data.get_value(node);
+    let val: i32 = data.get_value(node);
     
     data.free_node(node);
     

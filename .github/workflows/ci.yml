@@ -385,7 +385,7 @@ jobs:
           Write-Host "Running module test suite..."
           
           Push-Location tests\modules
-          $moduleResult = cmd /c "run_module_tests.bat `"${{ matrix.executable_path }}`" 2>&1"
+          $moduleResult = cmd /c "run_module_tests.bat `"..\..\${{ matrix.executable_path }}`" 2>&1"
           $moduleExit = $LASTEXITCODE
           Pop-Location
           

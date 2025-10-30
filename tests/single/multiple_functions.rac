@@ -1,0 +1,11 @@
+// EXPECT: 120
+fun factorial(n: i32): i32 {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+fun main(): i32 {
+    return factorial(5);  // 5! = 120
+}

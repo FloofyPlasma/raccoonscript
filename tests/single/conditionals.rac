@@ -1,0 +1,21 @@
+// EXPECT: 3
+fun max(a: i32, b: i32): i32 {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+fun main(): i32 {
+    let x = max(3, 1);
+    let y = max(2, 5);
+    
+    if (x == 3) {
+        if (y == 5) {
+            return 3;
+        }
+    }
+    
+    return 0;
+}

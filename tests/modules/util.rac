@@ -1,0 +1,24 @@
+// Utility functions module
+export fun max(a: i32, b: i32): i32 {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+
+export fun min(a: i32, b: i32): i32 {
+    if (a < b) {
+        return a;
+    }
+    return b;
+}
+
+export fun clamp(value: i32, min_val: i32, max_val: i32): i32 {
+    if (value < min_val) {
+        return min_val;
+    }
+    if (value > max_val) {
+        return max_val;
+    }
+    return value;
+}

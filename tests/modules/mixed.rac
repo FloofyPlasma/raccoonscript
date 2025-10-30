@@ -1,0 +1,20 @@
+// Module with mixed exported and private symbols
+export struct Public {
+    data: i32;
+}
+
+struct Private {
+    secret: i32;
+}
+
+export fun public_func(x: i32): i32 {
+    return private_func(x) + 1;
+}
+
+fun private_func(x: i32): i32 {
+    return x * 2;
+}
+
+export fun get_public_data(p: Public): i32 {
+    return p.data;
+}

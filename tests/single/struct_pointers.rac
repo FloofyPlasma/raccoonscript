@@ -1,0 +1,17 @@
+// EXPECT: 42
+struct Value {
+    data: i32;
+}
+
+fun main(): i32 {
+    let v = Value { data: 42 };
+    let ptr: Value* = &v;
+    
+    (*ptr).data = 43;
+    
+    if (v.data == 43) {
+        (*ptr).data = 42;
+    }
+    
+    return (*ptr).data;
+}

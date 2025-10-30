@@ -1,0 +1,25 @@
+// EXPECT: 25
+struct Point {
+    x: f32;
+    y: f32;
+}
+
+struct Line {
+    start: Point;
+    end: Point;
+}
+
+fun main(): i32 {
+    let p1 = Point { x: 0.0, y: 0.0 };
+    let p2 = Point { x: 3.0, y: 4.0 };
+    let line = Line { start: p1, end: p2 };
+    
+    let dx = line.end.x - line.start.x;
+    let dy = line.end.y - line.start.y;
+    let dist_squared = dx * dx + dy * dy;
+    
+    if (dist_squared > 24.0) {
+        return 25;
+    }
+    return 0;
+}

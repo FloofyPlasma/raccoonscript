@@ -194,14 +194,14 @@ jobs:
           exit 1
         fi
 
-    - name: Run Compiler Tests (Linux/macOS)
+    - name: Run Single-File Tests (Linux/macOS)
       if: runner.os != 'Windows'
       shell: bash
       run: |
-        echo "Running compiler test suite..."
+        echo "Running single-file test suite..."
         
         COMPILER="${{ matrix.executable_path }}"
-        TEST_DIR="tests"
+        TEST_DIR="tests/single"
         PASSED=0
         FAILED=0
         TOTAL=0
@@ -209,7 +209,7 @@ jobs:
         mkdir -p test_output
         
         if [ ! -d "$TEST_DIR" ]; then
-          echo "⚠️  No tests directory found, skipping tests"
+          echo "⚠️  No single-file tests directory found, skipping tests"
           exit 0
         fi
         
@@ -256,7 +256,7 @@ jobs:
         
         echo ""
         echo "========================================"
-        echo "Test Summary"
+        echo "Single-File Test Summary"
         echo "========================================"
         echo "Total:  $TOTAL"
         echo "Passed: $PASSED"
@@ -264,24 +264,22 @@ jobs:
         echo "========================================"
         
         if [ $FAILED -gt 0 ]; then
-          echo "❌ Some tests failed"
+          echo "❌ Some single-file tests failed"
           exit 1
         elif [ $TOTAL -eq 0 ]; then
-          echo "⚠️  No tests were run"
-          exit 0
+          echo "⚠️  No single-file tests were run"
         else
-          echo "✅ All tests passed!"
-          exit 0
+          echo "✅ All single-file tests passed!"
         fi
 
-    - name: Run Compiler Tests (Windows)
+    - name: Run Single-File Tests (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        Write-Host "Running compiler test suite..."
+        Write-Host "Running single-file test suite..."
         
         $compiler = "${{ matrix.executable_path }}"
-        $testDir = "tests"
+        $testDir = "tests/single"
         $passed = 0
         $failed = 0
         $total = 0
@@ -289,7 +287,7 @@ jobs:
         New-Item -ItemType Directory -Force -Path test_output | Out-Null
         
         if (-not (Test-Path $testDir)) {
-          Write-Host "⚠️  No tests directory found, skipping tests"
+          Write-Host "⚠️  No single-file tests directory found, skipping tests"
           exit 0
         }
         
@@ -342,7 +340,7 @@ jobs:
         
         Write-Host ""
         Write-Host "========================================"
-        Write-Host "Test Summary"
+        Write-Host "Single-File Test Summary"
         Write-Host "========================================"
         Write-Host "Total:  $total"
         Write-Host "Passed: $passed"
@@ -350,14 +348,54 @@ jobs:
         Write-Host "========================================"
         
         if ($failed -gt 0) {
-          Write-Host "❌ Some tests failed"
+          Write-Host "❌ Some single-file tests failed"
           exit 1
         } elseif ($total -eq 0) {
-          Write-Host "⚠️  No tests were run"
-          exit 0
+          Write-Host "⚠️  No single-file tests were run"
+          exit 1
         } else {
-          Write-Host "✅ All tests passed!"
+          Write-Host "✅ All single-file tests passed!"
           exit 0
+        }
+
+    - name: Run Module Tests (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        if [ -f "tests/modules/run_module_tests.sh" ]; then
+          echo ""
+          echo "Running module test suite..."
+          chmod +x tests/modules/run_module_tests.sh
+          tests/modules/run_module_tests.sh "../../${{ matrix.executable_path }}"
+          MODULE_EXIT=$?
+          
+          if [ $MODULE_EXIT -ne 0 ]; then
+            exit 1
+          fi
+        else
+          echo "⚠️  No module tests found, skipping"
+        fi
+
+    - name: Run Module Tests (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if (Test-Path "tests\modules\run_module_tests.bat") {
+          Write-Host ""
+          Write-Host "Running module test suite..."
+          
+          Push-Location tests\modules
+          $moduleResult = cmd /c "run_module_tests.bat `"..\..\${{ matrix.executable_path }}`" 2>&1"
+          $moduleExit = $LASTEXITCODE
+          Pop-Location
+          
+          Write-Host $moduleResult
+          
+          if ($moduleExit -ne 0) {
+            exit 1
+          }
+        } else {
+          Write-Host "⚠️  No module tests found, skipping"
         }
 
     - name: Compiler Version Info

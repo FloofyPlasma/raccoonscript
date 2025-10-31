@@ -25,13 +25,15 @@ std::string getObjectFileName(const std::string &outputFile) {
   std::string objectFile = outputFile;
 
 #ifdef _WIN32
-  if (objectFile.size() >= 4 ||
-      objectFile.substr(objectFile.size() - 4) != ".obj") {
+  if (objectFile.size() < 4 ||
+      (objectFile.substr(objectFile.size() - 4) != ".obj" &&
+       objectFile.substr(objectFile.size() - 2) != ".o")) {
     objectFile += ".obj";
   }
 #else
-  if (objectFile.size() >= 2 ||
-      objectFile.substr(objectFile.size() - 2) != ".o") {
+  if (objectFile.size() < 2 ||
+      (objectFile.substr(objectFile.size() - 2) != ".o" &&
+       objectFile.substr(objectFile.size() - 4) != ".obj")) {
     objectFile += ".o";
   }
 #endif
@@ -53,6 +55,55 @@ std::string getExecutableFileName(const std::string &outputFile) {
 #endif
 
   return execFile;
+}
+
+std::string getDirectory(const std::string &filepath) {
+  size_t lastSlash = filepath.find_last_of("/\\");
+  if (lastSlash != std::string::npos) {
+    return filepath.substr(0, lastSlash);
+  }
+  return ".";
+}
+
+std::vector<std::string>
+extractImports(const std::vector<Statement *> &program) {
+  std::vector<std::string> imports;
+
+  for (auto *stmt : program) {
+    if (auto *importDecl = dynamic_cast<ImportDecl *>(stmt)) {
+      imports.push_back(importDecl->modulePath);
+    }
+  }
+
+  return imports;
+}
+
+bool fileExists(const std::string &filePath) {
+  std::ifstream file(filePath);
+  return file.good();
+}
+
+std::string getMetadataPath(const std::string &sourceFile) {
+  std::string path = sourceFile;
+  size_t lastDot = path.find_last_of('.');
+  if (lastDot != std::string::npos) {
+    path = path.substr(0, lastDot);
+  }
+  return path + ".racm";
+}
+
+bool hasExports(const std::vector<Statement *> &program) {
+  for (auto *stmt : program) {
+    if (auto *funcDecl = dynamic_cast<FunctionDecl *>(stmt)) {
+      if (funcDecl->isExported)
+        return true;
+    }
+    if (auto *structDecl = dynamic_cast<StructDecl *>(stmt)) {
+      if (structDecl->isExported)
+        return true;
+    }
+  }
+  return false;
 }
 
 bool emitObjectFile(llvm::Module *module, const std::string &filename) {
@@ -203,6 +254,36 @@ int main(int argc, const char *argv[]) {
     }
   }
 
+  std::vector<std::string> imports = extractImports(program);
+  std::string baseDir = getDirectory(sourceFile);
+
+  for (const auto &import : imports) {
+    std::string importSourceFile =
+        baseDir == "." ? import + ".rac" : baseDir + "/" + import + ".rac";
+
+    std::string metadataFile =
+        baseDir == "." ? import + ".racm" : baseDir + "/" + import + ".racm";
+
+    if (!fileExists(metadataFile)) {
+      std::cerr << "Error: Module '" << import << "' not compiled\n";
+
+      if (fileExists(importSourceFile)) {
+        std::cerr << "File '" << importSourceFile << "' found but '"
+                  << metadataFile << "' missing\n\n";
+        std::cerr << "Run: " << argv[0] << " " << importSourceFile;
+
+        std::string suggestedObj = import + ".o";
+        std::cerr << " -o " << suggestedObj << "\n";
+        std::cerr << "Then: " << argv[0] << " " << sourceFile << " -o "
+                  << outputFile << " --no-link\n";
+      } else {
+        std::cerr << "Required file '" << importSourceFile << "' not found\n";
+      }
+
+      return 1;
+    }
+  }
+
   std::string moduleName = sourceFile;
   size_t lastSlash = moduleName.find_last_of("/\\");
   if (lastSlash != std::string::npos) {
@@ -214,6 +295,11 @@ int main(int argc, const char *argv[]) {
   }
 
   Codegen codegen(moduleName);
+  codegen.setModuleName(moduleName);
+  for (const auto &import : imports) {
+    codegen.loadImport(import, baseDir);
+  }
+
   codegen.generate(program);
   auto llvmModule = codegen.takeModule();
 
@@ -221,6 +307,13 @@ int main(int argc, const char *argv[]) {
   llvm::raw_string_ostream verifyStream(verifyError);
   if (llvm::verifyModule(*llvmModule, &verifyStream)) {
     llvm::errs() << "Module verification failed:\n" << verifyError << "\n";
+  }
+
+  if (hasExports(program)) {
+    ModuleMetadata metadata = codegen.getExportedSymbols();
+    std::string metadataPath = getMetadataPath(sourceFile);
+    metadata.saveToFile(metadataPath);
+    std::cout << "Module metadata written to " << metadataPath << "\n";
   }
 
   if (emitLLVM) {

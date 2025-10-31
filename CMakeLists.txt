@@ -25,6 +25,7 @@ set(SOURCES
     src/ASTPrinter.cpp
     src/Parser.cpp
     src/Codegen.cpp
+    src/ModuleMetadata.cpp
 )
 
 add_executable(raccoonc ${SOURCES})

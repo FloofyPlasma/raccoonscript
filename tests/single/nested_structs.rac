@@ -1,0 +1,29 @@
+// EXPECT: 25
+struct Point {
+    x: f32;
+    y: f32;
+}
+
+struct Line {
+    start: Point;
+    end: Point;
+}
+
+fun main(): i32 {
+    let p1: Point = Point { x: 0.0, y: 0.0 };
+    let p2: Point = Point { x: 3.0, y: 4.0 };
+    let line: Line = Line { start: p1, end: p2 };
+    
+    // Access through separate variables instead of chained access
+    let end_point: Point = line.end;
+    let start_point: Point = line.start;
+    
+    let dx: f32 = end_point.x - start_point.x;
+    let dy: f32 = end_point.y - start_point.y;
+    let dist_squared: f32 = dx * dx + dy * dy;
+    
+    if (dist_squared > 24.0) {
+        return 25;
+    }
+    return 0;
+}

@@ -1,0 +1,24 @@
+// Geometry module with struct exports
+export struct Point {
+    x: f32;
+    y: f32;
+}
+
+export struct Rect {
+    width: f32;
+    height: f32;
+}
+
+export fun area(r: Rect): f32 {
+    return r.width * r.height;
+}
+
+export fun distance_squared(p1: Point, p2: Point): f32 {
+    let dx: f32 = p2.x - p1.x;
+    let dy: f32 = p2.y - p1.y;
+    return dx * dx + dy * dy;
+}
+
+export fun make_point(x: f32, y: f32): Point {
+    return Point { x: x, y: y };
+}

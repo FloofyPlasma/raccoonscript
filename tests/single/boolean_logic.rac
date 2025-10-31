@@ -1,0 +1,13 @@
+// EXPECT: 1
+fun main(): i32 {
+    let a = 5;
+    let b = 10;
+    
+    if (a < b && b > 0) {
+        if (a == 5 || b == 100) {
+            return 1;
+        }
+    }
+    
+    return 0;
+}

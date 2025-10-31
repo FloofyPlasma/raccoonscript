@@ -5,8 +5,39 @@
 #include <string>
 
 void Parser::advance() { this->current = this->lexer.nextToken(); }
+Token Parser::peek() { return this->lexer.peekToken(); }
 
 Statement *Parser::parseStatement(bool insideFunction) {
+  if (!insideFunction && this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "import") {
+    return this->parseImportDecl();
+  }
+
+  if (!insideFunction && this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "export") {
+    this->advance(); // consume 'export'
+
+    if (this->current.type == TokenType::Keyword &&
+        this->current.lexeme == "fun") {
+      Statement *funcDecl = this->parseFunctionDecl();
+      if (FunctionDecl *fd = dynamic_cast<FunctionDecl *>(funcDecl)) {
+        fd->isExported = true;
+      }
+      return funcDecl;
+    }
+
+    if (this->current.type == TokenType::Keyword &&
+        this->current.lexeme == "struct") {
+      Statement *structDecl = this->parseStructDecl();
+      if (StructDecl *sd = dynamic_cast<StructDecl *>(structDecl)) {
+        sd->isExported = true;
+      }
+      return structDecl;
+    }
+
+    return nullptr; // error
+  }
+
   if (this->current.type == TokenType::Keyword &&
       (this->current.lexeme == "let" || this->current.lexeme == "const")) {
     bool isConst = (this->current.lexeme == "const");
@@ -67,11 +98,24 @@ Statement *Parser::parseVarDecl(bool isConst) {
     if (this->current.type != TokenType::Identifier) {
       return nullptr; // error
     }
+
     type = this->current.lexeme;
-    this->advance(); // consume type identifier
+    this->advance(); // consume first identifier
+
+    // Handle optional module prefix (ModuleName.TypeName)
+    if (this->current.type == TokenType::Dot) {
+      this->advance(); // consume '.'
+      if (this->current.type != TokenType::Identifier) {
+        return nullptr; // error
+      }
+      type += "." + this->current.lexeme;
+      this->advance(); // consume type identifier
+    }
+
+    // Handle pointer stars if any
     while (this->current.type == TokenType::Star) {
       type += "*";
-      this->advance(); // consume star
+      this->advance();
     }
   }
 
@@ -82,12 +126,6 @@ Statement *Parser::parseVarDecl(bool isConst) {
     if (!initializer) {
       std::cerr << "Failed to parse initializer for variable " << name << "\n";
       return nullptr;
-    }
-
-    // Log for debugging
-    if (auto *call = dynamic_cast<CallExpr *>(initializer)) {
-      std::cerr << "Parsed CallExpr for " << name << " to function "
-                << call->name << " with typeArg: " << call->type << "\n";
     }
   }
 
@@ -168,9 +206,14 @@ Statement *Parser::parseFunctionDecl() {
       return nullptr;
     }
     returnType = this->current.lexeme;
-    this->advance(); // consume return type
-  }
+    this->advance(); // consume base type
 
+    // Handle pointer stars for return type
+    while (this->current.type == TokenType::Star) {
+      returnType += "*";
+      this->advance();
+    }
+  }
   // Parse function body
   if (this->current.type != TokenType::LeftBrace) {
     return nullptr;
@@ -193,7 +236,7 @@ Statement *Parser::parseFunctionDecl() {
   } // missing '}'
   this->advance(); // consume '}'
 
-  return new FunctionDecl(name, params, body, returnType);
+  return new FunctionDecl(name, params, body, returnType, false);
 }
 
 Expr *Parser::parseExpression(int precedence) {
@@ -271,10 +314,37 @@ Expr *Parser::parsePrimary() {
   if (this->current.type == TokenType::Identifier) {
     std::string name = this->current.lexeme;
 
-    // Do not advance if at top-level and current token is 'fun'
     if (!(this->current.type == TokenType::Keyword &&
           this->current.lexeme == "fun")) {
       this->advance();
+    }
+
+    std::string moduleName = "";
+    if (this->current.type == TokenType::Dot) {
+      // Look ahead to see if this is module qualification or member access
+      // Module qualification: module.Function(...) or module.Struct{...}
+      // Member access: object.field (handled by parseExpression)
+
+      this->advance(); // consume '.'
+
+      if (this->current.type != TokenType::Identifier) {
+        return nullptr;
+      }
+
+      std::string afterDot = this->current.lexeme;
+      this->advance(); // consume identifier after dot
+
+      // Check what follows to determine the context
+      if (this->current.type == TokenType::LeftParen ||
+          this->current.type == TokenType::LeftBrace) {
+        // This is module.Function() or module.Struct{}
+        moduleName = name;
+        name = afterDot;
+      } else {
+        // This is object.field - create MemberAccessExpr
+        Variable *obj = new Variable(name);
+        return new MemberAccessExpr(obj, afterDot);
+      }
     }
 
     if (this->current.type == TokenType::LeftBrace) {
@@ -331,7 +401,7 @@ Expr *Parser::parsePrimary() {
       }
       this->advance(); // consume '}'
 
-      return new StructLiteral(name, fieldInits);
+      return new StructLiteral(name, fieldInits, moduleName);
     }
 
     if (this->current.type == TokenType::LeftParen) {
@@ -341,6 +411,9 @@ Expr *Parser::parsePrimary() {
              this->current.type != TokenType::EndOfFile) {
         Expr *arg = this->parseExpression();
         if (!arg) {
+          for (auto a : args) {
+            delete a;
+          }
           return nullptr;
         }
         args.push_back(arg);
@@ -355,7 +428,7 @@ Expr *Parser::parsePrimary() {
         return nullptr;
       }
       this->advance();
-      return new CallExpr(name, args, "");
+      return new CallExpr(name, args, "", moduleName);
     }
 
     return new Variable(name);
@@ -371,6 +444,7 @@ Expr *Parser::parsePrimary() {
     this->advance(); // consume ')'
     return expr;
   }
+
   if (current.type == TokenType::Keyword &&
       (current.lexeme == "malloc" || current.lexeme == "free")) {
     std::string name = current.lexeme;
@@ -404,7 +478,7 @@ Expr *Parser::parsePrimary() {
     if (current.type != TokenType::RightParen)
       return nullptr;
     advance();
-    return new CallExpr(name, args, typeArg);
+    return new CallExpr(name, args, typeArg, "");
   }
 
   return nullptr;
@@ -798,5 +872,35 @@ Statement *Parser::parseStructDecl() {
   }
   this->advance(); // consume '}'
 
-  return new StructDecl(name, fields);
+  return new StructDecl(name, fields, false);
+}
+
+Statement *Parser::parseImportDecl() {
+  this->advance(); // consume 'import'
+
+  if (this->current.type != TokenType::Identifier) {
+    return nullptr; // error
+  }
+
+  std::string modulePath = this->current.lexeme;
+  this->advance(); // consume module name
+
+  while (this->current.type == TokenType::Dot) {
+    this->advance(); // consume '.'
+
+    if (this->current.type != TokenType::Identifier) {
+      return nullptr; // error
+    }
+
+    modulePath += "/" + this->current.lexeme;
+    this->advance(); // consume identifier
+  }
+
+  if (this->current.type != TokenType::Semicolon) {
+    return nullptr;
+  }
+
+  this->advance(); // consume ';'
+
+  return new ImportDecl(modulePath);
 }

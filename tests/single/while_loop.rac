@@ -1,0 +1,12 @@
+// EXPECT: 10
+fun main(): i32 {
+    let counter = 0;
+    let sum = 0;
+    
+    while (counter < 5) {
+        sum = sum + counter;
+        counter = counter + 1;
+    }
+    
+    return sum;  // 0+1+2+3+4 = 10
+}

@@ -1,0 +1,8 @@
+// EXPECT: 100
+fun main(): i32 {
+    let ptr: i32* = malloc<i32>(1);
+    *ptr = 100;
+    let value = *ptr;
+    free(ptr);
+    return value;
+}

@@ -1,0 +1,17 @@
+// Basic math module for testing
+export fun add(x: i32, y: i32): i32 {
+    return x + y;
+}
+
+export fun multiply(x: i32, y: i32): i32 {
+    return x * y;
+}
+
+export fun subtract(x: i32, y: i32): i32 {
+    return x - y;
+}
+
+// Non-exported helper (should not be accessible)
+fun internal_helper(x: i32): i32 {
+    return x + 1;
+}

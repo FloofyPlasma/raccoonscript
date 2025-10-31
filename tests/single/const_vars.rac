@@ -1,0 +1,6 @@
+// EXPECT: 100
+fun main(): i32 {
+    const x: i32 = 100;
+    let y = x;
+    return y;
+}

@@ -4,16 +4,21 @@
 #include <string>
 
 class Lexer {
+public:
+  Lexer(const std::string &src) : source(src) {}
+  Token nextToken();
+  Token peekToken();
+
+private:
   const std::string &source;
   size_t pos = 0;
   int line = 1;
   int column = 1;
 
-public:
-  Lexer(const std::string &src) : source(src) {}
-  Token nextToken();
+  size_t savedPos;
+  int savedLine;
+  int savedColumn;
 
-private:
   [[deprecated("Whitespace skipping is handled in Lexer::skipComment().")]]
   void skipWhitespace();
   void skipComment();

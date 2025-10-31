@@ -1,0 +1,22 @@
+// EXPECT: 20
+import geometry;
+
+fun main(): i32 {
+    let p1: geometry.Point = geometry.make_point(0.0, 0.0);
+    let p2: geometry.Point = geometry.make_point(3.0, 4.0);
+    
+    let dist: f32 = geometry.distance_squared(p1, p2); // 25.0
+    
+    let r: geometry.Rect = geometry.Rect { width: 5.0, height: 4.0 };
+    let a: f32 = geometry.area(r); // 20.0
+    
+    if (dist > 24.0) {
+        if (a > 19.0) {
+            if (a < 21.0) {
+                return 20;
+            }
+        }
+    }
+    
+    return 0;
+}

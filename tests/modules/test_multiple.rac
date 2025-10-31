@@ -1,0 +1,21 @@
+// EXPECT: 42
+import math;
+import util;
+
+fun main(): i32 {
+    let sum = math.add(10, 20);      // 30
+    let prod = math.multiply(2, 5);  // 10
+    
+    let maximum = util.max(sum, prod);  // 30
+    let minimum = util.min(sum, prod);  // 10
+    
+    let result = math.add(maximum, minimum); // 40
+    
+    let clamped = util.clamp(result, 0, 50); // 40
+    
+    if (clamped == 40) {
+        return 42;
+    }
+    
+    return 0;
+}

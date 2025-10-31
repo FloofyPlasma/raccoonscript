@@ -1,0 +1,15 @@
+// EXPECT: 42
+fun add(x: i32, y: i32): i32 {
+    return x + y;
+}
+
+fun multiply(x: i32, y: i32): i32 {
+    return x * y;
+}
+
+fun main(): i32 {
+    let a = add(10, 20);        // 30
+    let b = multiply(2, 6);     // 12
+    let result = add(a, b);     // 42
+    return result;
+}

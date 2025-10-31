@@ -38,8 +38,10 @@ struct CharLiteral : Expr {
 struct StructLiteral : Expr {
   std::string typeName;
   std::vector<std::pair<std::string, Expr *>> fields; // field name + value
-  StructLiteral(std::string t, std::vector<std::pair<std::string, Expr *>> f)
-      : typeName(t), fields(f) {}
+  std::string moduleName;
+  StructLiteral(std::string t, std::vector<std::pair<std::string, Expr *>> f,
+                std::string m = "")
+      : typeName(t), fields(f), moduleName(m) {}
 };
 
 struct UnaryExpr : Expr {
@@ -64,8 +66,10 @@ struct CallExpr : Expr {
   std::string name;
   std::vector<Expr *> args;
   std::string type;
-  CallExpr(std::string n, std::vector<Expr *> a, std::string t)
-      : name(n), args(a), type(t) {}
+  std::string moduleName;
+  CallExpr(std::string n, std::vector<Expr *> a, std::string t,
+           std::string m = "")
+      : name(n), args(a), type(t), moduleName(m) {}
 };
 
 struct MemberAccessExpr : Expr {
@@ -92,17 +96,26 @@ struct FunctionDecl : Statement {
   std::vector<std::pair<std::string, std::string>> params; // name + type
   std::vector<Statement *> body;
   std::string returnType;
+  bool isExported;
+
   FunctionDecl(std::string n,
                std::vector<std::pair<std::string, std::string>> p,
-               std::vector<Statement *> b, std::string r)
-      : name(n), params(p), body(b), returnType(r) {}
+               std::vector<Statement *> b, std::string r, bool exported = false)
+      : name(n), params(p), body(b), returnType(r), isExported(exported) {}
 };
 
 struct StructDecl : Statement {
   std::string name;
   std::vector<std::pair<std::string, std::string>> fields; // name + type
-  StructDecl(std::string n, std::vector<std::pair<std::string, std::string>> f)
-      : name(n), fields(f) {}
+  bool isExported;
+  StructDecl(std::string n, std::vector<std::pair<std::string, std::string>> f,
+             bool exported = false)
+      : name(n), fields(f), isExported(exported) {}
+};
+
+struct ImportDecl : Statement {
+  std::string modulePath;
+  ImportDecl(std::string p) : modulePath(p) {}
 };
 
 struct ExprStmt : Statement {

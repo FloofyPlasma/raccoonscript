@@ -1,0 +1,19 @@
+// EXPECT: 8
+import calculator;
+
+fun main(): i32 {
+    let div = calculator.divide(20, 5);      // 4
+    let mod = calculator.modulo(17, 5);      // 2
+    let even = calculator.is_even(10);       // 1
+    let pow = calculator.power_of_two(3);    // 8
+    
+    if (div == 4) {
+        if (mod == 2) {
+            if (even == 1) {
+                return pow;
+            }
+        }
+    }
+    
+    return 0;
+}

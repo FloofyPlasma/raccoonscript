@@ -1,0 +1,16 @@
+// EXPECT: 15
+import math;
+
+fun main(): i32 {
+    let a = math.add(5, 3);        // 8
+    let b = math.multiply(2, 3);   // 6
+    let c = math.subtract(a, 1);   // 7
+    
+    if (c == 7) {
+        if (b == 6) {
+            return 15;
+        }
+    }
+    
+    return 0;
+}

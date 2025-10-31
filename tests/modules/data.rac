@@ -1,0 +1,24 @@
+// Module with pointers and heap allocation
+export struct Node {
+    value: i32;
+    next: Node*;
+}
+
+export fun create_node(val: i32): Node* {
+    let n: Node* = malloc<Node>(1);
+    (*n).value = val;
+    (*n).next = malloc<Node>(0);
+    return n;
+}
+
+export fun get_value(n: Node*): i32 {
+    return (*n).value;
+}
+
+export fun set_value(n: Node*, val: i32): void {
+    (*n).value = val;
+}
+
+export fun free_node(n: Node*): void {
+    free(n);
+}

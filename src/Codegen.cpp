@@ -54,7 +54,25 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
         getLLVMType(type.substr(0, type.size() - 1), ctx));
   }
 
-  auto it = this->structTypes.find(type);
+  // Handle qualified type names (module.Type)
+  std::string lookupName = type;
+  size_t dotPos = type.find('.');
+  if (dotPos != std::string::npos) {
+    // Convert "module.Type" to "module_Type"
+    std::string moduleName = type.substr(0, dotPos);
+    std::string typeName = type.substr(dotPos + 1);
+    lookupName = moduleName + "_" + typeName;
+  } else if (!this->currentModuleName.empty()) {
+    // For local types in a module, try mangled name first
+    std::string mangledName = this->currentModuleName + "_" + type;
+    auto it = this->structTypes.find(mangledName);
+    if (it != this->structTypes.end()) {
+      return it->second;
+    }
+    // Fall through to check primitive types
+  }
+
+  auto it = this->structTypes.find(lookupName);
   if (it != this->structTypes.end()) {
     return it->second;
   }
@@ -120,8 +138,10 @@ llvm::Type *Codegen::getLLVMType(const std::string &type, LLVMContext &ctx) {
 
 Codegen::Codegen(const std::string &moduleName)
     : module(std::make_unique<Module>(moduleName, context)),
-      builder(std::make_unique<IRBuilder<>>(context)) {
+      builder(std::make_unique<IRBuilder<>>(context)),
+      currentModuleName(moduleName) {
   this->pushScope();
+  this->currentModuleExports.moduleName = moduleName;
 }
 
 Codegen::~Codegen() { this->scopeStack.clear(); }
@@ -296,9 +316,22 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
 
   llvm::FunctionType *funcType =
       llvm::FunctionType::get(retTy, argTypes, false);
+
+  // Name mangling (module_functionName)
+  std::string functionName = funcDecl->name;
+  if (funcDecl->isExported && !this->currentModuleName.empty()) {
+    functionName = this->currentModuleName + "_" + funcDecl->name;
+
+    ExportedFunction exportedFunc;
+    exportedFunc.name = funcDecl->name;
+    exportedFunc.params = funcDecl->params;
+    exportedFunc.returnType = funcDecl->returnType;
+    this->currentModuleExports.functions.push_back(exportedFunc);
+  }
+
   llvm::Function *function =
       llvm::Function::Create(funcType, llvm::Function::ExternalLinkage,
-                             funcDecl->name, this->module.get());
+                             functionName, this->module.get());
 
   // Create entry block
   llvm::BasicBlock *entry =
@@ -620,8 +653,6 @@ void Codegen::genWhileStatement(WhileStmt *stmt) {
 
 llvm::Value *Codegen::genCallExpr(CallExpr *expr) {
   if (expr->name == "malloc") {
-    printf("Generating malloc for type %s\n", expr->type.c_str());
-
     if (expr->args.size() != 1) {
       fprintf(stderr,
               "Error: malloc<T>(count) requires exactly one argument.\n");
@@ -688,6 +719,91 @@ llvm::Value *Codegen::genCallExpr(CallExpr *expr) {
         builder->CreateBitCast(ptrVal, builder->getPtrTy(), "freeCast");
     return builder->CreateCall(freeFunc, {casted});
   }
+
+  std::string functionName = expr->name;
+
+  if (!expr->moduleName.empty()) {
+    // Qualified call: module.function
+    auto it = this->importedModules.find(expr->moduleName);
+    if (it == this->importedModules.end()) {
+      fprintf(stderr, "Error: Module '%s' not imported.\n",
+              expr->moduleName.c_str());
+      std::abort();
+    }
+
+    const ExportedFunction *exportedFunc = it->second.findFunction(expr->name);
+    if (!exportedFunc) {
+      fprintf(stderr, "Error: Function '%s' not found in module '%s'.\n",
+              expr->name.c_str(), expr->moduleName.c_str());
+      std::abort();
+    }
+
+    functionName = expr->moduleName + "_" + expr->name;
+
+    llvm::Function *callee = this->module->getFunction(functionName);
+    if (!callee) {
+      std::vector<llvm::Type *> paramTypes;
+      for (const auto &param : exportedFunc->params) {
+        std::string paramType = param.second;
+
+        size_t ptrCount = 0;
+        while (!paramType.empty() && paramType.back() == '*') {
+          paramType.pop_back();
+          ptrCount++;
+        }
+
+        const ExportedStruct *exportedStruct = it->second.findStruct(paramType);
+        if (exportedStruct) {
+          paramType = it->second.moduleName + "." + paramType;
+        }
+
+        for (size_t i = 0; i < ptrCount; i++) {
+          paramType += "*";
+        }
+
+        paramTypes.push_back(this->getLLVMType(paramType, this->context));
+      }
+
+      std::string returnType = exportedFunc->returnType;
+
+      size_t ptrCount = 0;
+      while (!returnType.empty() && returnType.back() == '*') {
+        returnType.pop_back();
+        ptrCount++;
+      }
+
+      const ExportedStruct *exportedStruct = it->second.findStruct(returnType);
+      if (exportedStruct) {
+        returnType = it->second.moduleName + "." + returnType;
+      }
+
+      for (size_t i = 0; i < ptrCount; i++) {
+        returnType += "*";
+      }
+
+      llvm::Type *returnTypeLLVM = this->getLLVMType(returnType, this->context);
+      llvm::FunctionType *funcType =
+          llvm::FunctionType::get(returnTypeLLVM, paramTypes, false);
+
+      callee = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage,
+                                      functionName, this->module.get());
+    }
+
+    std::vector<llvm::Value *> args;
+    for (auto *argExpr : expr->args) {
+      llvm::Value *argVal = this->genExpr(argExpr);
+      if (!argVal) {
+        fprintf(stderr, "Error: Invalid argument in call to '%s.%s'.\n",
+                expr->moduleName.c_str(), expr->name.c_str());
+        std::abort();
+      }
+      args.push_back(argVal);
+    }
+
+    return this->builder->CreateCall(
+        callee, args, callee->getReturnType()->isVoidTy() ? "" : "calltmp");
+  }
+  // Unqualified call
   llvm::Function *callee = this->module->getFunction(expr->name);
   if (!callee) {
     fprintf(stderr, "Error: Unknown function '%s',\n", expr->name.c_str());
@@ -852,7 +968,22 @@ llvm::Value *Codegen::genLValue(Expr *expr) {
         structPtr = localVar->alloca;
       }
 
-      auto it = this->structTypes.find(structTypeName);
+      std::string mangledName = structTypeName;
+      size_t dotPos = structTypeName.find('.');
+      if (dotPos != std::string::npos) {
+        // Convert "module.Type" to "module_Type"
+        std::string moduleName = structTypeName.substr(0, dotPos);
+        std::string typeName = structTypeName.substr(dotPos + 1);
+        mangledName = moduleName + "_" + typeName;
+      } else if (!this->currentModuleName.empty()) {
+        std::string localMangled =
+            this->currentModuleName + "_" + structTypeName;
+        if (this->structTypes.find(localMangled) != this->structTypes.end()) {
+          mangledName = localMangled;
+        }
+      }
+
+      auto it = this->structTypes.find(mangledName);
       if (it == this->structTypes.end()) {
         fprintf(stderr, "Error: Unknown struct type '%s' in member access.\n",
                 structTypeName.c_str());
@@ -860,7 +991,7 @@ llvm::Value *Codegen::genLValue(Expr *expr) {
       }
       structType = it->second;
 
-      int fieldIndex = this->getFieldIndex(structTypeName, memberAccess->field);
+      int fieldIndex = this->getFieldIndex(mangledName, memberAccess->field);
       return this->builder->CreateStructGEP(structType, structPtr, fieldIndex,
                                             memberAccess->field + "_ptr");
     }
@@ -878,7 +1009,23 @@ llvm::Value *Codegen::genLValue(Expr *expr) {
             std::abort();
           }
 
-          auto it = this->structTypes.find(structTypeName);
+          std::string mangledName = structTypeName;
+          size_t dotPos = structTypeName.find('.');
+          if (dotPos != std::string::npos) {
+            // Convert "module.Type" to "module_Type"
+            std::string moduleName = structTypeName.substr(0, dotPos);
+            std::string typeName = structTypeName.substr(dotPos + 1);
+            mangledName = moduleName + "_" + typeName;
+          } else if (!this->currentModuleName.empty()) {
+            std::string localMangled =
+                this->currentModuleName + "_" + structTypeName;
+            if (this->structTypes.find(localMangled) !=
+                this->structTypes.end()) {
+              mangledName = localMangled;
+            }
+          }
+
+          auto it = this->structTypes.find(mangledName);
           if (it == this->structTypes.end()) {
             fprintf(stderr,
                     "Error: Unknown struct type '%s' in member access.\n",
@@ -892,7 +1039,7 @@ llvm::Value *Codegen::genLValue(Expr *expr) {
               ptrVar->name + "_load");
 
           int fieldIndex =
-              this->getFieldIndex(structTypeName, memberAccess->field);
+              this->getFieldIndex(mangledName, memberAccess->field);
           return this->builder->CreateStructGEP(
               structType, structPtr, fieldIndex, memberAccess->field + "_ptr");
         } else {
@@ -1076,7 +1223,12 @@ int Codegen::getFieldIndex(const std::string &structName,
 }
 
 void Codegen::genStructDecl(StructDecl *structDecl) {
-  if (this->structTypes.find(structDecl->name) != this->structTypes.end()) {
+  std::string mangledName = structDecl->name;
+  if (!this->currentModuleName.empty()) {
+    mangledName = this->currentModuleName + "_" + structDecl->name;
+  }
+
+  if (this->structTypes.find(mangledName) != this->structTypes.end()) {
     fprintf(stderr, "Error: Struct '%s' is already defined.\n",
             structDecl->name.c_str());
     std::abort();
@@ -1095,18 +1247,48 @@ void Codegen::genStructDecl(StructDecl *structDecl) {
   }
 
   llvm::StructType *structType =
-      llvm::StructType::create(this->context, fieldTypes, structDecl->name);
+      llvm::StructType::create(this->context, fieldTypes, mangledName);
 
-  this->structTypes[structDecl->name] = structType;
+  this->structTypes[mangledName] = structType;
 
-  this->structFieldMetadata[structDecl->name] = structDecl->fields;
+  this->structFieldMetadata[mangledName] = structDecl->fields;
+
+  if (structDecl->isExported) {
+    ExportedStruct exportedStruct;
+    exportedStruct.name = structDecl->name;
+    exportedStruct.fields = structDecl->fields;
+    this->currentModuleExports.structs.push_back(exportedStruct);
+  }
 }
-
 llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
-  auto it = this->structTypes.find(expr->typeName);
+  std::string structName;
+  if (!expr->moduleName.empty()) {
+    auto it = this->importedModules.find(expr->moduleName);
+    if (it == this->importedModules.end()) {
+      fprintf(stderr, "Error: Module '%s' not imported.\n",
+              expr->moduleName.c_str());
+      std::abort();
+    }
+
+    const ExportedStruct *exportedStruct =
+        it->second.findStruct(expr->typeName);
+    if (!exportedStruct) {
+      fprintf(stderr, "Error: Struct '%s' not found in module '%s'.\n",
+              expr->typeName.c_str(), expr->moduleName.c_str());
+      std::abort();
+    }
+
+    structName = it->second.moduleName + "_" + expr->typeName;
+  } else {
+    structName = expr->typeName;
+    if (!this->currentModuleName.empty()) {
+      structName = this->currentModuleName + "_" + expr->typeName;
+    }
+  }
+
+  auto it = this->structTypes.find(structName);
   if (it == this->structTypes.end()) {
-    fprintf(stderr, "Error: Unknown struct type '%s'.\n",
-            expr->typeName.c_str());
+    fprintf(stderr, "Error: Unknown struct type '%s'.\n", structName.c_str());
     std::abort();
   }
 
@@ -1128,10 +1310,10 @@ llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
 
   this->builder->restoreIP(oldIP);
 
-  auto metaIt = this->structFieldMetadata.find(expr->typeName);
+  auto metaIt = this->structFieldMetadata.find(structName);
   if (metaIt == this->structFieldMetadata.end()) {
     fprintf(stderr, "Error: No field metadata for struct '%s'.\n",
-            expr->typeName.c_str());
+            structName.c_str());
     std::abort();
   }
 
@@ -1140,7 +1322,7 @@ llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
   if (expr->fields.size() != structFields.size()) {
     fprintf(stderr,
             "Error: Struct '%s' requires %zu fields, but %zu were provided.\n",
-            expr->typeName.c_str(), structFields.size(), expr->fields.size());
+            structName.c_str(), structFields.size(), expr->fields.size());
     std::abort();
   }
 
@@ -1148,7 +1330,7 @@ llvm::Value *Codegen::genStructLiteral(StructLiteral *expr) {
     const std::string &fieldName = fieldInit.first;
     Expr *fieldValue = fieldInit.second;
 
-    int fieldIndex = this->getFieldIndex(expr->typeName, fieldName);
+    int fieldIndex = this->getFieldIndex(structName, fieldName);
 
     llvm::Value *value = this->genExpr(fieldValue);
     if (!value) {
@@ -1187,7 +1369,21 @@ llvm::Value *Codegen::genMemberAccessExpr(MemberAccessExpr *expr) {
       structPtr = localVar->alloca;
     }
 
-    auto it = this->structTypes.find(structTypeName);
+    std::string mangledName = structTypeName;
+    size_t dotPos = structTypeName.find('.');
+    if (dotPos != std::string::npos) {
+      // Convert "module.Type" to "module_Type"
+      std::string moduleName = structTypeName.substr(0, dotPos);
+      std::string typeName = structTypeName.substr(dotPos + 1);
+      mangledName = moduleName + "_" + typeName;
+    } else if (!this->currentModuleName.empty()) {
+      std::string localMangled = this->currentModuleName + "_" + structTypeName;
+      if (this->structTypes.find(localMangled) != this->structTypes.end()) {
+        mangledName = localMangled;
+      }
+    }
+
+    auto it = this->structTypes.find(mangledName);
     if (it == this->structTypes.end()) {
       fprintf(stderr, "Error: Unknown struct type '%s' in member access.\n",
               structTypeName.c_str());
@@ -1208,7 +1404,22 @@ llvm::Value *Codegen::genMemberAccessExpr(MemberAccessExpr *expr) {
           std::abort();
         }
 
-        auto it = this->structTypes.find(structTypeName);
+        std::string mangledName = structTypeName;
+        size_t dotPos = structTypeName.find('.');
+        if (dotPos != std::string::npos) {
+          // Convert "module.Type" to "module_Type"
+          std::string moduleName = structTypeName.substr(0, dotPos);
+          std::string typeName = structTypeName.substr(dotPos + 1);
+          mangledName = moduleName + "_" + typeName;
+        } else if (!this->currentModuleName.empty()) {
+          std::string localMangled =
+              this->currentModuleName + "_" + structTypeName;
+          if (this->structTypes.find(localMangled) != this->structTypes.end()) {
+            mangledName = localMangled;
+          }
+        }
+
+        auto it = this->structTypes.find(mangledName);
         if (it == this->structTypes.end()) {
           fprintf(stderr, "Error: Unknown struct type '%s' in member access.\n",
                   structTypeName.c_str());
@@ -1235,12 +1446,13 @@ llvm::Value *Codegen::genMemberAccessExpr(MemberAccessExpr *expr) {
     std::abort();
   }
 
-  int fieldIndex = this->getFieldIndex(structTypeName, expr->field);
+  std::string mangledName = structType->getName().str();
+  int fieldIndex = this->getFieldIndex(mangledName, expr->field);
 
-  auto metaIt = this->structFieldMetadata.find(structTypeName);
+  auto metaIt = this->structFieldMetadata.find(mangledName);
   if (metaIt == this->structFieldMetadata.end()) {
     fprintf(stderr, "Error: No field metadata for struct '%s'.\n",
-            structTypeName.c_str());
+            mangledName.c_str());
     std::abort();
   }
 
@@ -1251,4 +1463,66 @@ llvm::Value *Codegen::genMemberAccessExpr(MemberAccessExpr *expr) {
       structType, structPtr, fieldIndex, expr->field + "_ptr");
 
   return this->builder->CreateLoad(fieldType, fieldPtr, expr->field);
+}
+
+// MARK: Modules
+
+void Codegen::setModuleName(const std::string &moduleName) {
+  this->currentModuleName = moduleName;
+}
+
+ModuleMetadata Codegen::getExportedSymbols() const {
+  return this->currentModuleExports;
+}
+
+void Codegen::loadImport(const std::string &modulePath,
+                         const std::string &baseDir) {
+  if (this->importedModules.find(modulePath) != this->importedModules.end()) {
+    return;
+  }
+
+  std::string metadataPath = baseDir;
+  if (!metadataPath.empty() && metadataPath.back() != '/' &&
+      metadataPath.back() != '\\') {
+    metadataPath += "/";
+  }
+  metadataPath += modulePath + ".racm";
+
+  ModuleMetadata metadata = ModuleMetadata::loadFromFile(metadataPath);
+
+  if (metadata.moduleName.empty()) {
+    fprintf(stderr, "Error: Failed to load module metadata from '%s'\n",
+            metadataPath.c_str());
+    std::abort();
+  }
+
+  this->importedModules[modulePath] = metadata;
+
+  for (const auto &exportedStruct : metadata.structs) {
+    std::string mangledName = metadata.moduleName + "_" + exportedStruct.name;
+
+    if (this->structTypes.find(mangledName) != this->structTypes.end()) {
+      continue;
+    }
+
+    std::vector<llvm::Type *> fieldTypes;
+    for (const auto &field : exportedStruct.fields) {
+      llvm::Type *fieldType = this->getLLVMType(field.second, this->context);
+      if (!fieldType) {
+        fprintf(stderr,
+                "Error: Invalid type '%s' for field '%s' in imported struct "
+                "'%s'.\n",
+                field.second.c_str(), field.first.c_str(),
+                exportedStruct.name.c_str());
+        std::abort();
+      }
+      fieldTypes.push_back(fieldType);
+    }
+
+    llvm::StructType *structType =
+        llvm::StructType::create(this->context, fieldTypes, mangledName);
+
+    this->structTypes[mangledName] = structType;
+    this->structFieldMetadata[mangledName] = exportedStruct.fields;
+  }
 }

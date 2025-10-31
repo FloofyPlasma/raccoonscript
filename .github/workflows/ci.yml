@@ -232,7 +232,7 @@ jobs:
           
           output_exe="test_output/${test_name}"
           
-          if "$COMPILER" "$test_file" -o "$output_exe" 2>&1; then
+          if "$COMPILER" -v "$test_file" -o "$output_exe" 2>&1; then
             echo "  ✓ Compilation successful"
             
             set +e
@@ -316,7 +316,7 @@ jobs:
           
           $outputExe = "test_output\$testName.exe"
           
-          $compileResult = & $compiler $testFile.FullName -o $outputExe 2>&1
+          $compileResult = & $compiler -v $testFile.FullName -o $outputExe 2>&1
           
           if ($LASTEXITCODE -eq 0) {
             Write-Host "  ✓ Compilation successful"

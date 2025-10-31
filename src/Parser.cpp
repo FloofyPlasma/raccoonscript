@@ -98,11 +98,24 @@ Statement *Parser::parseVarDecl(bool isConst) {
     if (this->current.type != TokenType::Identifier) {
       return nullptr; // error
     }
+
     type = this->current.lexeme;
-    this->advance(); // consume type identifier
+    this->advance(); // consume first identifier
+
+    // Handle optional module prefix (ModuleName.TypeName)
+    if (this->current.type == TokenType::Dot) {
+      this->advance(); // consume '.'
+      if (this->current.type != TokenType::Identifier) {
+        return nullptr; // error
+      }
+      type += "." + this->current.lexeme;
+      this->advance(); // consume type identifier
+    }
+
+    // Handle pointer stars if any
     while (this->current.type == TokenType::Star) {
       type += "*";
-      this->advance(); // consume star
+      this->advance();
     }
   }
 

@@ -123,6 +123,12 @@ if errorlevel 1 (
     set /a FAILED+=1
     goto test4
 )
+%COMPILER% math.rac -o math.o --no-link >nul 2>&1
+if errorlevel 1 (
+    echo   X Compilation of math.rac failed
+    set /a FAILED+=1
+    goto test4
+)
 %COMPILER% test_multiple.rac -o test_multiple.o --no-link >nul 2>&1
 if errorlevel 1 (
     echo   X Compilation of test_multiple.rac failed

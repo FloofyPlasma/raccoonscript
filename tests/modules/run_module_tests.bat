@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 set "COMPILER=%~1"
-if "%COMPILER%"=="" set "COMPILER=..\..\build\Release\raccoonc.exe"
+set "COMPILER=..\..\build\Release\raccoonc.exe"
 
 set PASSED=0
 set FAILED=0

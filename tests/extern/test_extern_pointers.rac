@@ -1,0 +1,11 @@
+// EXPECT: 99
+extern fun rac_set_value(ptr: i32*, value: i32): void;
+extern fun rac_get_value(ptr: i32*): i32;
+
+fun main(): i32 {
+    let ptr: i32* = malloc<i32>(1);
+    rac_set_value(ptr, 99);
+    let result: i32 = rac_get_value(ptr);
+    free(ptr);
+    return result;
+}

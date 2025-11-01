@@ -1,0 +1,6 @@
+// EXPECT: 42
+extern fun rac_get_answer(): i32;
+
+fun main(): i32 {
+    return rac_get_answer();
+}

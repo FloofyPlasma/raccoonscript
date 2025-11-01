@@ -1,0 +1,12 @@
+// EXPECT: 10
+extern fun rac_double(x: i32): i32;
+
+fun triple(x: i32): i32 {
+    return x + x + x;
+}
+
+fun main(): i32 {
+    let a: i32 = rac_double(2);
+    let b: i32 = triple(2);
+    return a + b;
+}

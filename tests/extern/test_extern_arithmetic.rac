@@ -1,0 +1,8 @@
+// EXPECT: 15
+extern fun rac_add(a: i32, b: i32): i32;
+extern fun rac_multiply(a: i32, b: i32): i32;
+
+fun main(): i32 {
+    let sum: i32 = rac_add(5, 10);
+    return sum;
+}

@@ -36,6 +36,8 @@ namespace fs = std::filesystem;
 struct CompilerOptions {
   std::vector<std::string> sourceFiles;
   std::string outputFile = "a.out";
+  std::string targetTriple = llvm::sys::getDefaultTargetTriple();
+  bool bareMetal = false;
   bool emitLLVM = false;
   bool emitObject = false;
   bool noLink = false;
@@ -170,8 +172,12 @@ bool emitObjectFile(llvm::Module *module, const std::string &filename,
   llvm::InitializeAllAsmParsers();
   llvm::InitializeAllAsmPrinters();
 
-  llvm::Triple targetTriple = llvm::Triple(llvm::sys::getDefaultTargetTriple());
-  module->setTargetTriple(targetTriple);
+  llvm::Triple targetTriple(opts.targetTriple);
+  if (opts.bareMetal) {
+    module->setTargetTriple(llvm::Triple("x86_64-pc-none-elf"));
+  } else {
+    module->setTargetTriple(targetTriple);
+  }
 
   std::string error;
   const llvm::Target *target =
@@ -205,9 +211,16 @@ bool emitObjectFile(llvm::Module *module, const std::string &filename,
     break;
   }
 
-  llvm::TargetMachine *targetMachine = target->createTargetMachine(
-      targetTriple, cpu, features, opt, llvm::Reloc::PIC_, std::nullopt,
-      codegenOptLevel);
+  llvm::TargetMachine *targetMachine = nullptr;
+  if (opts.bareMetal) {
+    targetMachine = target->createTargetMachine(targetTriple, cpu, features,
+                                                opt, llvm::Reloc::Static,
+                                                std::nullopt, codegenOptLevel);
+  } else {
+    targetMachine = target->createTargetMachine(targetTriple, cpu, features,
+                                                opt, llvm::Reloc::PIC_,
+                                                std::nullopt, codegenOptLevel);
+  }
 
   if (!targetMachine) {
     llvm::errs() << "Error: Could not create target machine\n";
@@ -299,7 +312,7 @@ bool linkExecutable(const std::vector<std::string> &objectFiles,
   if (tryCommand("clang.exe --version")) {
     linkCmd = "clang.exe " + objects + "-o " + outputFile;
   } else {
-    linkCmd = "cl.exe /Fe:" + outputFile + " " + objects;
+    linkCmd = "link.exe /ENTRY:main /OUT:" + outputFile + " " + objects;
   }
 #else
   if (tryCommand("clang --version")) {
@@ -494,6 +507,17 @@ void printUsage(const char *progName) {
       << "  -v, --verbose     Enable verbose output\n"
       << "  -q, --quiet       Suppress non-error output\n"
       << "  -f, --force       Force recompilation of all files\n"
+      << "  --target <triple>  Specify target architecture/platform\n"
+      << "                     Affects codegen, relocation model, and "
+         "linking.\n"
+      << "                     Examples:\n"
+      << "                       x86_64-linux-gnu   - Linux (hosted)\n"
+      << "                       x86_64-none-elf    - Generic freestanding "
+         "ELF\n"
+      << "                       x86_64-bios        - Bare-metal BIOS "
+         "(bootable)\n"
+      << "                       x86_64-uefi        - UEFI PE32+ application\n"
+      << "                     Default: host triple (e.g. x86_64-linux-gnu)\n"
       << "  --help            Display this help message\n";
 }
 
@@ -534,6 +558,11 @@ bool parseArguments(int argc, const char *argv[], CompilerOptions &opts) {
       opts.forceRecompile = true;
     } else if (arg[0] != '-') {
       opts.sourceFiles.push_back(arg);
+    } else if (arg == "--target" && i + 1 < argc) {
+      opts.targetTriple = argv[++i];
+      if (opts.targetTriple == "x86_64-bios") {
+        opts.bareMetal = true;
+      }
     } else {
       std::cerr << "Unknown option: " << arg << "\n";
       printUsage(argv[0]);
@@ -545,6 +574,12 @@ bool parseArguments(int argc, const char *argv[], CompilerOptions &opts) {
     std::cerr << "Error: No source files specified\n";
     printUsage(argv[0]);
     return false;
+  }
+
+  if (opts.bareMetal) {
+    log(opts, "[INFO] BIOS target detected; skipping host linker.");
+    log(opts, "       Use ld -T linker.ld -nostdlib -o kernel.elf ...");
+    opts.noLink = true;
   }
 
   return true;

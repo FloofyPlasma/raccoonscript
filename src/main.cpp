@@ -507,6 +507,17 @@ void printUsage(const char *progName) {
       << "  -v, --verbose     Enable verbose output\n"
       << "  -q, --quiet       Suppress non-error output\n"
       << "  -f, --force       Force recompilation of all files\n"
+      << "  --target <triple>  Specify target architecture/platform\n"
+      << "                     Affects codegen, relocation model, and "
+         "linking.\n"
+      << "                     Examples:\n"
+      << "                       x86_64-linux-gnu   - Linux (hosted)\n"
+      << "                       x86_64-none-elf    - Generic freestanding "
+         "ELF\n"
+      << "                       x86_64-bios        - Bare-metal BIOS "
+         "(bootable)\n"
+      << "                       x86_64-uefi        - UEFI PE32+ application\n"
+      << "                     Default: host triple (e.g. x86_64-linux-gnu)\n"
       << "  --help            Display this help message\n";
 }
 

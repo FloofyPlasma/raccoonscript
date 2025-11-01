@@ -1,0 +1,16 @@
+// EXPECT: 42
+struct Point {
+    x: i32;
+    y: i32;
+}
+
+extern fun rac_point_sum(p: Point*): i32;
+
+fun main(): i32 {
+    let p: Point* = malloc<Point>(1);
+    (*p).x = 20;
+    (*p).y = 22;
+    let result: i32 = rac_point_sum(p);
+    free(p);
+    return result;
+}

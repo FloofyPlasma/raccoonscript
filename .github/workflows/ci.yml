@@ -398,6 +398,47 @@ jobs:
           Write-Host "⚠️  No module tests found, skipping"
         }
 
+    - name: Run Interop Tests (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        if [ -f "tests/extern/run_extern_tests.sh" ]; then
+          echo ""
+          echo "Running interop test suite..."
+          chmod +x tests/extern/run_extern_tests.sh
+          tests/extern/run_extern_tests.sh "../../${{ matrix.executable_path }}"
+          EXTERN_EXIT=$?
+          
+          if [ $EXTERN_EXIT -ne 0 ]; then
+            exit 1
+          fi
+        else
+          echo "⚠️  No interop tests found, skipping"
+        fi
+
+    - name: Run Interop Tests (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if (Test-Path "tests\extern\run_extern_tests.bat") {
+          Write-Host ""
+          Write-Host "Running interop test suite..."
+          
+          Push-Location tests\extern
+          $externResult = cmd /c "run_extern_tests.bat `"..\..\${{ matrix.executable_path }}`" 2>&1"
+          $externExit = $LASTEXITCODE
+          Pop-Location
+          
+          Write-Host $externResult
+          
+          if ($externExit -ne 0) {
+            exit 1
+          }
+        } else {
+          Write-Host "⚠️  No interop tests found, skipping"
+        }
+
+
     - name: Compiler Version Info
       shell: bash
       run: |

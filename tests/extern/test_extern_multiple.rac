@@ -1,0 +1,10 @@
+// EXPECT: 100
+extern fun rac_add_i32(a: i32, b: i32): i32;
+extern fun rac_add_i64(a: i64, b: i64): i64;
+extern fun rac_max(a: i32, b: i32): i32;
+
+fun main(): i32 {
+    let x: i32 = rac_add_i32(30, 20);
+    let y: i32 = rac_max(x, 100);
+    return y;
+}

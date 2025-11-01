@@ -18,7 +18,7 @@ public:
 
   Statement *parseStatement(bool insideFunction = false);
   Statement *parseVarDecl(bool isConst);
-  Statement *parseFunctionDecl();
+  Statement *parseFunctionDecl(bool isExternal = false);
   Statement *parseIfStatement();
   Statement *parseWhileStatement();
   Statement *parseForStatement();

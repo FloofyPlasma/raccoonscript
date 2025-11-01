@@ -1,0 +1,11 @@
+// EXPECT: 5
+extern fun rac_increment(ptr: i32*): void;
+
+fun main(): i32 {
+    let val: i32* = malloc<i32>(1);
+    (*val) = 4;
+    rac_increment(val);
+    let result: i32 = *val;
+    free(val);
+    return result;
+}

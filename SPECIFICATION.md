@@ -17,7 +17,7 @@ Raccoon is a statically-typed, systems programming language with manual memory m
 Reserved words that cannot be used as identifiers:
 ```
 fun let const struct return if else while for 
-import export malloc free true false void
+import export malloc free true false void extern
 ```
 
 ---

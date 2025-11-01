@@ -14,12 +14,24 @@ Statement *Parser::parseStatement(bool insideFunction) {
   }
 
   if (!insideFunction && this->current.type == TokenType::Keyword &&
+      this->current.lexeme == "extern") {
+    this->advance(); // consume 'extern'
+
+    if (this->current.type == TokenType::Keyword &&
+        this->current.lexeme == "fun") {
+      return this->parseFunctionDecl(true);
+    }
+
+    return nullptr;
+  }
+
+  if (!insideFunction && this->current.type == TokenType::Keyword &&
       this->current.lexeme == "export") {
     this->advance(); // consume 'export'
 
     if (this->current.type == TokenType::Keyword &&
         this->current.lexeme == "fun") {
-      Statement *funcDecl = this->parseFunctionDecl();
+      Statement *funcDecl = this->parseFunctionDecl(false);
       if (FunctionDecl *fd = dynamic_cast<FunctionDecl *>(funcDecl)) {
         fd->isExported = true;
       }
@@ -54,7 +66,7 @@ Statement *Parser::parseStatement(bool insideFunction) {
 
   if (!insideFunction && this->current.type == TokenType::Keyword &&
       this->current.lexeme == "fun") {
-    return this->parseFunctionDecl();
+    return this->parseFunctionDecl(false);
   }
 
   if (this->current.type == TokenType::Keyword &&
@@ -139,7 +151,7 @@ Statement *Parser::parseVarDecl(bool isConst) {
   return new VarDecl{name, type, initializer, isConst};
 }
 
-Statement *Parser::parseFunctionDecl() {
+Statement *Parser::parseFunctionDecl(bool isExtern) {
   // Consume 'fun'
   this->advance();
   if (this->current.type != TokenType::Identifier) {
@@ -214,7 +226,14 @@ Statement *Parser::parseFunctionDecl() {
       this->advance();
     }
   }
-  // Parse function body
+  if (isExtern) {
+    if (this->current.type != TokenType::Semicolon) {
+      return nullptr; // missing ';'
+    }
+    this->advance(); // consume ';'
+
+    return new FunctionDecl(name, params, {}, returnType, false, true);
+  }
   if (this->current.type != TokenType::LeftBrace) {
     return nullptr;
   } // missing '{'
@@ -236,9 +255,8 @@ Statement *Parser::parseFunctionDecl() {
   } // missing '}'
   this->advance(); // consume '}'
 
-  return new FunctionDecl(name, params, body, returnType, false);
+  return new FunctionDecl(name, params, body, returnType, false, false);
 }
-
 Expr *Parser::parseExpression(int precedence) {
   Expr *left = this->parseUnary();
   if (!left) {

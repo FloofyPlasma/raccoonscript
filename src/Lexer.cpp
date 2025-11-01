@@ -259,8 +259,9 @@ Token Lexer::identifier() {
 
   // Check for keyword
   static const std::unordered_set<std::string> keywords = {
-      "fun", "let",    "const",  "struct", "return", "if",   "else",  "while",
-      "for", "import", "export", "malloc", "free",   "true", "false", "void"};
+      "fun",  "let",   "const", "struct", "return", "if",
+      "else", "while", "for",   "import", "export", "malloc",
+      "free", "true",  "false", "void",   "extern"};
 
   TokenType type =
       keywords.count(lexeme) ? TokenType::Keyword : TokenType::Identifier;

@@ -312,7 +312,7 @@ bool linkExecutable(const std::vector<std::string> &objectFiles,
   if (tryCommand("clang.exe --version")) {
     linkCmd = "clang.exe " + objects + "-o " + outputFile;
   } else {
-    linkCmd = "link.exe /OUT:" + outputFile + " " + objects;
+    linkCmd = "link.exe /ENTRY:main /OUT:" + outputFile + " " + objects;
   }
 #else
   if (tryCommand("clang --version")) {

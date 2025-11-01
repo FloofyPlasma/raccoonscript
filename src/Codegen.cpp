@@ -319,7 +319,9 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
 
   // Name mangling (module_functionName)
   std::string functionName = funcDecl->name;
-  if (funcDecl->isExported && !this->currentModuleName.empty()) {
+
+  if (!funcDecl->isExternal && funcDecl->isExported &&
+      !this->currentModuleName.empty()) {
     functionName = this->currentModuleName + "_" + funcDecl->name;
 
     ExportedFunction exportedFunc;
@@ -332,6 +334,10 @@ llvm::Function *Codegen::genFunction(FunctionDecl *funcDecl) {
   llvm::Function *function =
       llvm::Function::Create(funcType, llvm::Function::ExternalLinkage,
                              functionName, this->module.get());
+
+  if (funcDecl->isExternal) {
+    return function;
+  }
 
   // Create entry block
   llvm::BasicBlock *entry =

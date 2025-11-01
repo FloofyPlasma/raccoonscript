@@ -35,6 +35,10 @@ namespace fs = std::filesystem;
 
 struct CompilerOptions {
   std::vector<std::string> sourceFiles;
+  std::vector<std::string> cSourceFiles;
+  std::vector<std::string> objectFiles;
+  std::vector<std::string> libraries;
+  std::vector<std::string> libraryPaths;
   std::string outputFile = "a.out";
   std::string targetTriple = llvm::sys::getDefaultTargetTriple();
   bool bareMetal = false;
@@ -47,7 +51,6 @@ struct CompilerOptions {
   bool quiet = false;
   bool forceRecompile = false;
 };
-
 std::string getObjectFileName(const std::string &outputFile) {
   fs::path p(outputFile);
 
@@ -306,19 +309,29 @@ bool linkExecutable(const std::vector<std::string> &objectFiles,
     objects += obj + " ";
   }
 
+  std::string libPaths;
+  for (const auto &path : opts.libraryPaths) {
+    libPaths += "-L" + path + " ";
+  }
+
+  std::string libs;
+  for (const auto &lib : opts.libraries) {
+    libs += "-l" + lib + " ";
+  }
+
   std::string linkCmd;
 
 #ifdef _WIN32
   if (tryCommand("clang.exe --version")) {
-    linkCmd = "clang.exe " + objects + "-o " + outputFile;
+    linkCmd = "clang.exe " + objects + libPaths + libs + "-o " + outputFile;
   } else {
     linkCmd = "link.exe /ENTRY:main /OUT:" + outputFile + " " + objects;
   }
 #else
   if (tryCommand("clang --version")) {
-    linkCmd = "clang " + objects + "-o " + outputFile;
+    linkCmd = "clang " + objects + libPaths + libs + "-o " + outputFile;
   } else {
-    linkCmd = "gcc " + objects + "-o " + outputFile;
+    linkCmd = "gcc " + objects + libPaths + libs + "-o " + outputFile;
   }
 #endif
 
@@ -330,6 +343,95 @@ bool linkExecutable(const std::vector<std::string> &objectFiles,
   }
 
   log(opts, "Linked executable written to " + outputFile);
+  return true;
+}
+
+bool compileCSources(const std::vector<std::string> &cSourceFiles,
+                     std::vector<std::string> &outputObjects,
+                     const CompilerOptions &opts) {
+  if (cSourceFiles.empty()) {
+    return true;
+  }
+
+  auto tryCommand = [](const std::string &cmd) -> bool {
+#ifdef _WIN32
+    int result = std::system((cmd + " >nul 2>nul").c_str());
+#else
+    int result = std::system((cmd + " >/dev/null 2>&1").c_str());
+#endif
+    return result == 0;
+  };
+
+  std::string compiler;
+#ifdef _WIN32
+  if (tryCommand("clang.exe --version")) {
+    compiler = "clang.exe";
+  } else {
+    compiler = "cl.exe";
+  }
+#else
+  if (tryCommand("clang --version")) {
+    compiler = "clang";
+  } else {
+    compiler = "gcc";
+  }
+#endif
+
+  for (const auto &cFile : cSourceFiles) {
+    fs::path cPath(cFile);
+    std::string objFile = cPath.stem().string() + ".o";
+
+    // Check if recompilation needed
+    if (!opts.forceRecompile && fileExists(objFile)) {
+      long cTime = getFileModificationTime(cFile);
+      long objTime = getFileModificationTime(objFile);
+      if (cTime <= objTime) {
+        logVerbose(opts, "Skipping " + cFile + " (up to date)");
+        outputObjects.push_back(objFile);
+        continue;
+      }
+    }
+
+    log(opts, "Compiling C source: " + cFile + "...");
+
+    std::string optFlag;
+    switch (opts.optLevel) {
+    case 0:
+      optFlag = "-O0";
+      break;
+    case 1:
+      optFlag = "-O1";
+      break;
+    case 2:
+      optFlag = "-O2";
+      break;
+    case 3:
+      optFlag = "-O3";
+      break;
+    default:
+      optFlag = "-O0";
+      break;
+    }
+
+    std::string compileCmd =
+        compiler + " -c " + optFlag + " " + cFile + " -o " + objFile;
+
+    if (opts.generateDebugInfo) {
+      compileCmd += " -g";
+    }
+
+    logVerbose(opts, "C compile command: " + compileCmd);
+    int result = std::system(compileCmd.c_str());
+    if (result != 0) {
+      std::cerr << "C compilation failed for " << cFile << " (exit code "
+                << result << ")\n";
+      return false;
+    }
+
+    log(opts, "C object file written to " + objFile);
+    outputObjects.push_back(objFile);
+  }
+
   return true;
 }
 
@@ -502,6 +604,10 @@ void printUsage(const char *progName) {
       << "  --emit-llvm       Emit LLVM IR (.ll)\n"
       << "  --emit-object     Emit object file (.o), skip linking\n"
       << "  --no-link         Alias for --emit-object\n"
+      << "  -c <file>         Add C source file to compile and link\n"
+      << "  <file.o>          Add pre-compiled object file to link\n"
+      << "  -l <library>      Link with library (e.g., -lm for math)\n"
+      << "  -L <path>         Add library search path\n"
       << "  -O0, -O1, -O2, -O3  Set optimization level (default: -O0)\n"
       << "  -g                Generate debug information (not implemented)\n"
       << "  -v, --verbose     Enable verbose output\n"
@@ -540,6 +646,12 @@ bool parseArguments(int argc, const char *argv[], CompilerOptions &opts) {
     } else if (arg == "--emit-object" || arg == "--no-link") {
       opts.emitObject = true;
       opts.noLink = true;
+    } else if (arg == "-c" && i + 1 < argc) {
+      opts.cSourceFiles.push_back(argv[++i]);
+    } else if (arg == "-l" && i + 1 < argc) {
+      opts.libraries.push_back(argv[++i]);
+    } else if (arg == "-L" && i + 1 < argc) {
+      opts.libraryPaths.push_back(argv[++i]);
     } else if (arg == "-O0") {
       opts.optLevel = 0;
     } else if (arg == "-O1") {
@@ -557,7 +669,19 @@ bool parseArguments(int argc, const char *argv[], CompilerOptions &opts) {
     } else if (arg == "-f" || arg == "--force") {
       opts.forceRecompile = true;
     } else if (arg[0] != '-') {
-      opts.sourceFiles.push_back(arg);
+      fs::path p(arg);
+      std::string ext = p.extension().string();
+
+      if (ext == ".rac") {
+        opts.sourceFiles.push_back(arg);
+      } else if (ext == ".c") {
+        opts.cSourceFiles.push_back(arg);
+      } else if (ext == ".o" || ext == ".obj") {
+        opts.objectFiles.push_back(arg);
+      } else {
+        // Assume .rac if no extension
+        opts.sourceFiles.push_back(arg);
+      }
     } else if (arg == "--target" && i + 1 < argc) {
       opts.targetTriple = argv[++i];
       if (opts.targetTriple == "x86_64-bios") {
@@ -686,6 +810,22 @@ int main(int argc, const char *argv[]) {
       objectFiles.push_back(pair.second.objectFile);
     }
   }
+
+  std::vector<std::string> cObjectFiles;
+  if (!compileCSources(opts.cSourceFiles, cObjectFiles, opts)) {
+    for (auto &unitPair : allUnits) {
+      for (auto stmt : unitPair.second.program) {
+        delete stmt;
+      }
+    }
+    return 1;
+  }
+
+  objectFiles.insert(objectFiles.end(), cObjectFiles.begin(),
+                     cObjectFiles.end());
+
+  objectFiles.insert(objectFiles.end(), opts.objectFiles.begin(),
+                     opts.objectFiles.end());
 
   if (!opts.noLink) {
     std::string execFile = getExecutableFileName(opts.outputFile);

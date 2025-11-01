@@ -97,11 +97,14 @@ struct FunctionDecl : Statement {
   std::vector<Statement *> body;
   std::string returnType;
   bool isExported;
+  bool isExternal;
 
   FunctionDecl(std::string n,
                std::vector<std::pair<std::string, std::string>> p,
-               std::vector<Statement *> b, std::string r, bool exported = false)
-      : name(n), params(p), body(b), returnType(r), isExported(exported) {}
+               std::vector<Statement *> b, std::string r, bool exported = false,
+               bool ext = false)
+      : name(n), params(p), body(b), returnType(r), isExported(exported),
+        isExternal(ext) {}
 };
 
 struct StructDecl : Statement {
